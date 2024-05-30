@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 sbi-rt = { version = "0.0.3", features = ["legacy"] }
 log = "0.4"
+riscv = "0.10.1"

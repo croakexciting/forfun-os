@@ -5,6 +5,7 @@
 mod arch;
 mod sbi;
 mod utils;
+mod trap;
 
 use core::arch::global_asm;
 
