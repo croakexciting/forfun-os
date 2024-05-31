@@ -8,9 +8,12 @@ pub struct TrapContext {
 }
 
 impl TrapContext {
-    pub fn new(entry: usize, sp: usize) -> Self {
-        unsafe {
-            let mut s = sstatus::read();
+    pub fn new(entry: usize) -> Self {
+        let s = sstatus::read();
+        TrapContext {
+            x: [0; 32],
+            sstatus: s,
+            sepc: entry,
         }
     }
 

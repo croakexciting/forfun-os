@@ -7,3 +7,5 @@ edition = "2021"
 sbi-rt = { version = "0.0.3", features = ["legacy"] }
 log = "0.4"
 riscv = "0.10.1"
+once_cell = { version = "1.19.0", features = ["alloc"] }
+buddy_system_allocator = "0.6"
