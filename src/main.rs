@@ -9,18 +9,18 @@ mod utils;
 mod trap;
 mod syscall;
 mod process;
+mod config;
 
 use core::arch::global_asm;
+use process::run_app;
 use trap::context::TrapContext;
 use buddy_system_allocator::LockedHeap;
-use once_cell::sync::OnceCell;
 
 global_asm!(include_str!("arch/riscv64/entry.asm"));
 
 #[global_allocator]
 /// heap allocator instance
 static HEAP_ALLOCATOR: LockedHeap = LockedHeap::empty();
-static MY_ONCE_CELL: OnceCell<u32> = OnceCell::new();
 
 fn init_heap() {
     extern "C" {
@@ -36,8 +36,7 @@ fn init_heap() {
 #[no_mangle]
 pub fn os_main() -> ! {
     init_heap();
-    MY_ONCE_CELL.set(42).unwrap();
     println!("Hello, world!");
-    println!("trap context struct size {}", core::mem::size_of::<TrapContext>());
+    run_app(0);
     sbi::shutdown(false)
 }
