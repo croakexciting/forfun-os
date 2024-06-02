@@ -12,8 +12,8 @@ mod process;
 mod config;
 
 use core::arch::global_asm;
-use process::run_app;
-use trap::context::TrapContext;
+extern crate alloc;
+use process::start_first_app;
 use buddy_system_allocator::LockedHeap;
 
 global_asm!(include_str!("arch/riscv64/entry.asm"));
@@ -36,7 +36,6 @@ fn init_heap() {
 #[no_mangle]
 pub fn os_main() -> ! {
     init_heap();
-    println!("Hello, world!");
-    run_app(0);
-    sbi::shutdown(false)
+    trap::init();
+    start_first_app();
 }

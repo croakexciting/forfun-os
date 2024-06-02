@@ -8,6 +8,8 @@ use riscv::register::{
     stvec::{self, TrapMode}
 };
 
+use crate::syscall::syscall;
+
 global_asm!(include_str!("trap.S"));
 
 pub fn init() {
@@ -26,7 +28,10 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
     let scause = scause::read();
     let stval = stval::read();
     match scause.cause() {
-        Trap::Exception(Exception::UserEnvCall) => {}
+        Trap::Exception(Exception::UserEnvCall) => {
+            ctx.sepc += 4;
+            ctx.x[10] = syscall(ctx.x[17], [ctx.x[10], ctx.x[11], ctx.x[12]]) as usize;
+        }
         _ => {
             panic!(
                 "Unsupported trap {:?}, stval = {:#x}",
