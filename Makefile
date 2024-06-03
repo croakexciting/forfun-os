@@ -2,6 +2,7 @@ TARGET ?= riscv64gc-unknown-none-elf
 MODE ?= release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/forfun-os
 KERNEL_BIN := $(KERNEL_ELF).bin
+APP_BIN := appbins/hello_world.bin
 
 ifeq ($(MODE), release)
 	MODE_ARG := --release
@@ -18,6 +19,8 @@ K210-BOARD ?= kd233
 K210_BOOTLOADER_SIZE := 131072
 
 KERNEL_ENTRY := 0x80020000
+APP_ENTRY := 0x80200000
+APP_ENTRY2 := 0x80300000
 
 # Binutils
 OBJDUMP := rust-objdump --arch-name=riscv64
@@ -34,7 +37,9 @@ clean:
 QEMU_ARGS := -machine virt \
 			 -nographic \
 			 -bios $(BOOTLOADER) \
-			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY)
+			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY) \
+			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY) \
+			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY2)
 
 run: build
 ifeq ($(BOARD), qemu)
@@ -45,5 +50,8 @@ else ifeq ($(BOARD), k210)
 	@mv $(BOOTLOADER).copy $(KERNEL_BIN)
 	python3 tools/kflash/kflash.py -p $(K210-SERIALPORT) -b 1500000 -B $(K210-BOARD) -t $(KERNEL_BIN)
 endif
+
+debug: build
+	qemu-system-riscv64 $(QEMU_ARGS) -s -S
 
 .PHONY: build clean run
