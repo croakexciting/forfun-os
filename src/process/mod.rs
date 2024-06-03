@@ -2,7 +2,10 @@ pub mod app;
 pub mod switch;
 pub mod context;
 
+use core::borrow::BorrowMut;
+
 use app::*;
+use switch::__switch;
 
 use crate::{
     config::*, process, trap::context::TrapContext, utils::type_extern::RefCellWrap
@@ -99,4 +102,20 @@ pub fn run_next() {
     // 创建一个 idle app，这个 app 的状态始终是 running，但是运行到它的时候，就直接 yield 出去
     // 使得内核中始终保持一个进程的存在
     
+}
+
+pub fn run_apps() {
+    use ProcessStatus::*;
+    loop {
+        let mut manager = APP_MANAGER.exclusive_access();
+        let process = manager.next_app().borrow_mut();
+        let idle_ctx: *mut context::SwitchContext = manager.idle_ctx();
+        match process.status {
+            READY => unsafe {
+                __switch(idle_ctx, &mut process.ctx as *mut _);
+            },
+            RUNNING => {},
+            _ => {},
+        }
+    }
 }

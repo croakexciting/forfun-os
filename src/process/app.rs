@@ -1,28 +1,41 @@
+use core::cell::RefMut;
+
 use crate::config::*;
+use crate::trap::context::TrapContext;
+use crate::utils::type_extern::RefCellWrap;
 
 use alloc::vec;
 use alloc::vec::Vec;
 use log::error;
 
 use super::context::SwitchContext;
+use super::KERNEL_STACKS;
 
 
-pub struct AppManager {
+pub struct AppManagerInner {
     current: usize,
     apps: Vec<Process>,
+    idle_ctx: SwitchContext,
 }
 
-impl AppManager {
+impl AppManagerInner {
     pub fn new() -> Self {
-        AppManager {
+        AppManagerInner {
             current: 0,
             apps: vec![],
+            // idle process is a unstop loop process
+            idle_ctx: SwitchContext::new(0, 0),
         }
     }
 
     // pub fn app(&self)
-    pub fn app(&self, id: usize) -> Process {
-        self.apps[id].clone()
+    pub fn app(&mut self, id: usize) -> RefMut<Process> {
+        self.apps[id].exclusive_access()
+    }
+
+    // get idle ctx
+    pub fn idle_ctx(&mut self) -> *mut SwitchContext {
+        &mut self.idle_ctx as *mut _
     }
 
     // return app id, if create failed, return -1
@@ -32,7 +45,9 @@ impl AppManager {
         if app_id < MAX_APP_NUM {
             let mut process = Process::new(app_id, base_addr);
             process.set_status(ProcessStatus::READY);
-            self.apps.push(process);
+            unsafe {
+                self.apps.push(RefCellWrap::new(process));
+            }
             app_id as i32
         } else {
             error!("The app pool now is full, can't add new app");
@@ -40,19 +55,19 @@ impl AppManager {
         }
     }
 
-    pub fn current_app(&mut self) -> Process {
-        self.apps[self.current].clone()
+    pub fn current_app(&mut self) -> RefMut<Process> {
+        self.app(self.current)
     }
 
-    pub fn next_app(&mut self) -> Process {
+    pub fn next_app(&mut self) -> RefMut<Process> {
         // When the next api be called, there must be at least one apps in vector
         let next = (self.current + 1) % self.apps.len();
         self.current = next;
-        self.apps[next].clone()
+        self.app(self.current)
     }
 
-    pub fn set_status(&mut self, id: usize, status: ProcessStatus) {
-        self.apps[id].set_status(status);
+    pub fn run_apps(&self) {
+
     }
 }
 
@@ -70,7 +85,11 @@ impl Process {
             id: id,
             base_address: base_addr,
             status: ProcessStatus::UNINIT,
-            ctx: SwitchContext::new(0, 0),
+            ctx: SwitchContext::new_with_restore_addr(
+                KERNEL_STACKS[id].push_context(
+                    TrapContext::new(base_addr)
+                )
+            ),
         }
     }
 

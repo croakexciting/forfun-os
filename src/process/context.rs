@@ -20,4 +20,12 @@ impl SwitchContext {
             s: [0; 12],
         }
     }
+
+    pub fn new_with_restore_addr(sp: usize) -> Self {
+        extern "C" {
+            fn __restore();
+        }
+
+        Self::new(__restore as usize, sp)
+    }
 }
