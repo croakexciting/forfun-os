@@ -1,6 +1,3 @@
-use core::borrow::Borrow;
-use core::marker::PhantomData;
-
 use crate::{
     config::*, 
     trap::context::TrapContext,
@@ -10,6 +7,7 @@ use crate::{
 use lazy_static::*;
 use alloc::vec;
 use alloc::vec::Vec;
+use log::error;
 
 // 内核需要为每个应用提供独立的内核栈
 // 这些栈既不在栈空间，也不在堆空间，而是直接从物理内存上分配一块固定大小且连续的区域, Linux 默认为 16KB，我们暂时使用 4KB
@@ -46,31 +44,33 @@ struct AppManager {
 }
 
 impl AppManager {
-    pub fn get_or_create(&mut self, id: usize) -> Process {
-        if id >= self.apps.len() && id < MAX_APP_NUM {
-            // create new app instance
-            self.apps.push(Process {
-                id: self.apps.len(),
-                status: ProcessStatus::READY,
-            });
-            self.apps[self.apps.len() - 1].clone()
+    // pub fn app(&self)
+    pub fn app(&self, id: usize) -> Process {
+        self.apps[id].clone()
+    }
+
+    // return app id, if create failed, return -1
+    pub fn create_app(&mut self, base_addr: usize) -> i32 {
+        // just add a process at the tail
+        let app_id = self.apps.len();
+        if app_id < MAX_APP_NUM {
+            let mut process = Process::new(app_id, base_addr);
+            process.set_status(ProcessStatus::READY);
+            self.apps.push(process);
+            app_id as i32
         } else {
-            self.apps[id].clone()
+            error!("The app pool now is full, can't add new app");
+            return -1;
         }
     }
 
-    pub fn create(&mut self) -> Process {
-        self.get_or_create(self.apps.len())
-    }
-
-    pub fn current(&mut self) -> Process {
+    pub fn current_app(&mut self) -> Process {
         self.apps[self.current].clone()
     }
 
-    pub fn next(&mut self) -> Process {
+    pub fn next_app(&mut self) -> Process {
         // When the next api be called, there must be at least one apps in vector
-        self.create();
-        let next = (self.current + 1) % MAX_APP_NUM;
+        let next = (self.current + 1) % self.apps.len();
         self.current = next;
         self.apps[next].clone()
     }
@@ -83,10 +83,19 @@ impl AppManager {
 #[derive(Copy, Clone)]
 struct Process {
     id: usize,
+    base_address: usize,
     status: ProcessStatus,
 }
 
 impl Process {
+    pub fn new(id: usize, base_addr: usize) -> Self {
+        Process {
+            id: id,
+            base_address: base_addr,
+            status: ProcessStatus::UNINIT,
+        }
+    }
+
     pub fn set_status(&mut self, status: ProcessStatus) {
         self.status = status;
     }
@@ -94,6 +103,7 @@ impl Process {
 
 #[derive(Copy, Clone)]
 enum ProcessStatus {
+    UNINIT,
     READY,
     RUNNING,
     EXITED,
@@ -102,15 +112,15 @@ enum ProcessStatus {
 lazy_static! {
     static ref APP_MANAGER: RefCellWrap<AppManager> = unsafe {
         // create first app
-        let first_app = Process {
-            id: 0,
-            status: ProcessStatus::READY,
-        };
+        let mut first_app = Process::new(0, APP_START_ADDRESS);
+        first_app.set_status(ProcessStatus::READY);
+        let mut apps = vec![first_app];
+        apps.reserve(MAX_APP_NUM);
 
         RefCellWrap::new(
             AppManager {
                 current: 0,
-                apps: vec![first_app],
+                apps,
             }
         )   
     };
@@ -124,7 +134,7 @@ fn start_app(process: &Process) -> ! {
     match process.status {
         ProcessStatus::READY => unsafe {
             let sp = KERNEL_STACKS[process.id].push_context(TrapContext::new(
-                APP_START_ADDRESS + process.id * APP_SIZE
+                process.base_address
             ));
             __restore(sp);
             unreachable!()
@@ -133,9 +143,15 @@ fn start_app(process: &Process) -> ! {
     }
 }
 
-pub fn start_first_app() -> ! {
+// Default create the first app, other app created by manual
+pub fn create_app(base_addr: usize) -> i32 {
     let mut manager = APP_MANAGER.exclusive_access();
-    let process = manager.get_or_create(0);
+    manager.create_app(base_addr)
+}
+
+pub fn start_first_app() -> ! {
+    let manager = APP_MANAGER.exclusive_access();
+    let process = manager.app(0);
     drop(manager);
     start_app(&process)
 }
@@ -143,9 +159,9 @@ pub fn start_first_app() -> ! {
 pub fn start_next_app() -> ! {
     // get process status
     let mut manager = APP_MANAGER.exclusive_access();
-    let current = manager.current();
+    let current = manager.current_app();
     manager.set_status(current.id, ProcessStatus::EXITED);
-    let next = manager.create();
+    let next = manager.next_app();
     println!("current appid is {}, next appid is {}", current.id, next.id);
 
     drop(manager);
