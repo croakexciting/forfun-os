@@ -2,13 +2,10 @@ pub mod app;
 pub mod switch;
 pub mod context;
 
-use core::borrow::BorrowMut;
-
 use app::*;
-use switch::__switch;
 
 use crate::{
-    config::*, process, trap::context::TrapContext, utils::type_extern::RefCellWrap
+    config::*, trap::context::TrapContext
 };
 
 use lazy_static::*;
@@ -61,4 +58,9 @@ pub fn run_apps() -> ! {
 
 pub fn exit(exit_code: i32) -> ! {
     APP_MANAGER.exit(exit_code)
+}
+
+// nano time
+pub fn sleep(duration: usize) {
+    APP_MANAGER.sleep(duration)
 }

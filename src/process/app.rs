@@ -1,9 +1,10 @@
 use core::borrow::BorrowMut;
-use core::cell::{Ref, RefMut};
+use core::cell::RefMut;
 
 use crate::process::switch::__switch;
-use crate::{config::*, process};
+use crate::config::*;
 use crate::trap::context::TrapContext;
+use crate::utils::timer::nanoseconds;
 use crate::utils::type_extern::RefCellWrap;
 
 use alloc::vec;
@@ -66,22 +67,18 @@ impl AppManagerInner {
         if self.started {
             // When the next api be called, there must be at least one apps in vector
             let next = (self.current + 1) % self.apps.len();
+            self.current = next;
             self.app(next)
         } else {
             self.started = true;
             self.app(0)
         }
     }
-
-    pub fn run_apps(&self) {
-
-    }
 }
 
 #[derive(Copy, Clone)]
 pub struct Process {
     pub id: usize,
-    pub base_address: usize,
     pub status: ProcessStatus,
     pub ctx: SwitchContext,
 }
@@ -90,7 +87,6 @@ impl Process {
     pub fn new(id: usize, base_addr: usize) -> Self {
         Process {
             id: id,
-            base_address: base_addr,
             status: ProcessStatus::UNINIT,
             ctx: SwitchContext::new_with_restore_addr(
                 KERNEL_STACKS[id].push_context(
@@ -109,11 +105,13 @@ impl Process {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum ProcessStatus {
     UNINIT,
     READY,
     RUNNING,
+    // sleep status with start and duration timestamp(ns) 
+    SLEEP(usize, usize),
     EXITED,
 }
 
@@ -142,17 +140,24 @@ impl AppManager {
             match next.status {
                 READY => unsafe {
                     next.set_status(RUNNING);
-                    inner.current = next.id;
                     drop(inner);
                     __switch(idle_ctx, next_ctx_ptr);
                 },
                 RUNNING => unsafe {
-                    inner.current = next.id;
                     drop(inner);
                     __switch(idle_ctx, next_ctx_ptr);
                 }
+                SLEEP(a, b) => unsafe {
+                    if a + b < nanoseconds() {
+                        next.set_status(RUNNING);
+                        drop(inner);
+                        __switch(idle_ctx, next_ctx_ptr);
+                    } else {
+                        // println!("[kernel] a+b is {}, current is {}", (a+b), nanoseconds());
+                        continue;
+                    }
+                }
                 _ => {
-                    println!("This process not ready");
                     continue;
                 },
             }
@@ -169,12 +174,26 @@ impl AppManager {
         }
     }
 
+    pub fn sleep(&self, duration: usize) {
+        let mut inner = self.inner_access();
+        let idle_ctx = inner.idle_ctx();
+        let current_app = inner.current_app();
+        
+        // set current time and sleep time
+        current_app.set_status(ProcessStatus::SLEEP(nanoseconds(), duration));
+        let current_ctx_ptr: *mut SwitchContext = current_app.ctx_ptr();
+        drop(inner);
+        unsafe {
+            __switch(current_ctx_ptr, idle_ctx);
+        }
+    }
+
     pub fn exit(&self, exit_code: i32) -> ! {
         let mut inner = self.inner_access();
         let idle_ctx = inner.idle_ctx();
         let current_ctx_ptr = inner.current_app().ctx_ptr();
         inner.current_app().set_status(ProcessStatus::EXITED);
-        println!("[kernel] Application {} exited with code {}", inner.current_app().id, exit_code);
+        // println!("[kernel] Application {} exited with code {}", inner.current_app().id, exit_code);
         drop(inner);
         unsafe {
             __switch(current_ctx_ptr, idle_ctx);

@@ -11,6 +11,10 @@ mod syscall;
 mod process;
 mod config;
 
+#[cfg(feature = "riscv_qemu")]
+#[path = "board/riscv_qemu.rs"]
+mod board;
+
 use core::arch::global_asm;
 extern crate alloc;
 use process::{create_app, run_apps};
@@ -38,7 +42,8 @@ pub fn os_main() -> ! {
     init_heap();
     trap::init();
 
-    create_app(0x80200000);
+    create_app(0x80400000);
     create_app(0x80300000);
+    create_app(0x80200000);
     run_apps();
 }
