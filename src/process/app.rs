@@ -44,11 +44,11 @@ impl AppManagerInner {
     }
 
     // return app id, if create failed, return -1
-    pub fn create_app(&mut self, base_addr: usize) -> i32 {
+    pub fn create_app(&mut self, base_addr: usize, tick: usize) -> i32 {
         // just add a process at the tail
         let app_id = self.apps.len();
         if app_id < MAX_APP_NUM {
-            let mut process = Process::new(app_id, base_addr);
+            let mut process = Process::new(app_id, base_addr, tick);
             process.set_status(ProcessStatus::READY);
             self.apps.push(process);
             app_id as i32
@@ -78,15 +78,15 @@ impl AppManagerInner {
 
 #[derive(Copy, Clone)]
 pub struct Process {
-    pub id: usize,
+    pub tick: usize,
     pub status: ProcessStatus,
     pub ctx: SwitchContext,
 }
 
 impl Process {
-    pub fn new(id: usize, base_addr: usize) -> Self {
+    pub fn new(id: usize, base_addr: usize, tick: usize) -> Self {
         Process {
-            id: id,
+            tick,
             status: ProcessStatus::UNINIT,
             ctx: SwitchContext::new_with_restore_addr(
                 KERNEL_STACKS[id].push_context(
@@ -109,7 +109,8 @@ impl Process {
 pub enum ProcessStatus {
     UNINIT,
     READY,
-    RUNNING,
+    // running status with tick number
+    RUNNING(usize),
     // sleep status with start and duration timestamp(ns) 
     SLEEP(usize, usize),
     EXITED,
@@ -135,21 +136,35 @@ impl AppManager {
         loop {
             let mut inner = self.inner_access();
             let idle_ctx = inner.idle_ctx();
+
+            // 更新当前任务时间片，如果时间片还有剩余，切换回当前任务
+            let current = inner.current_app();
+            if let RUNNING(tick) = current.status {
+                if tick - 1 > 0 {
+                    let current_ctx_ptr = current.ctx_ptr();
+                    current.set_status(RUNNING(tick - 1));
+                    drop(inner);
+                    unsafe {__switch(idle_ctx, current_ctx_ptr);}
+                    continue;
+                }
+            }
+
             let next = inner.next_app();
             let next_ctx_ptr = next.ctx_ptr();
             match next.status {
                 READY => unsafe {
-                    next.set_status(RUNNING);
+                    next.set_status(RUNNING(next.tick));
                     drop(inner);
                     __switch(idle_ctx, next_ctx_ptr);
                 },
-                RUNNING => unsafe {
+                RUNNING(_) => unsafe {
+                    next.set_status(SLEEP(nanoseconds(), 0));
                     drop(inner);
                     __switch(idle_ctx, next_ctx_ptr);
                 }
                 SLEEP(a, b) => unsafe {
                     if a + b < nanoseconds() {
-                        next.set_status(RUNNING);
+                        next.set_status(RUNNING(next.tick));
                         drop(inner);
                         __switch(idle_ctx, next_ctx_ptr);
                     } else {
@@ -188,7 +203,7 @@ impl AppManager {
         }
     }
 
-    pub fn exit(&self, exit_code: i32) -> ! {
+    pub fn exit(&self, _exit_code: i32) -> ! {
         let mut inner = self.inner_access();
         let idle_ctx = inner.idle_ctx();
         let current_ctx_ptr = inner.current_app().ctx_ptr();
@@ -201,8 +216,8 @@ impl AppManager {
         }
     }
 
-    pub fn create_app(&self, base_addr: usize) -> i32 {
+    pub fn create_app(&self, base_addr: usize, tick: usize) -> i32 {
         let mut inner = self.inner_access();
-        inner.create_app(base_addr)
+        inner.create_app(base_addr, tick)
     }
 }

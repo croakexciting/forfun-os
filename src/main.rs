@@ -19,6 +19,7 @@ use core::arch::global_asm;
 extern crate alloc;
 use process::{create_app, run_apps};
 use buddy_system_allocator::LockedHeap;
+use utils::timer;
 
 global_asm!(include_str!("arch/riscv64/entry.asm"));
 
@@ -42,8 +43,13 @@ pub fn os_main() -> ! {
     init_heap();
     trap::init();
 
+    create_app(0x80600000);
+    create_app(0x80500000);
     create_app(0x80400000);
     create_app(0x80300000);
     create_app(0x80200000);
+
+    trap::enable_timer_interrupt();
+    timer::set_trigger();
     run_apps();
 }

@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 pub mod app;
 pub mod switch;
 pub mod context;
@@ -48,8 +50,12 @@ lazy_static! {
 }
 
 // Default create the first app, other app created by manual
+pub fn create_app_with_tick(base_addr: usize, tick: usize) -> i32 {
+    APP_MANAGER.create_app(base_addr, tick)
+}
+
 pub fn create_app(base_addr: usize) -> i32 {
-    APP_MANAGER.create_app(base_addr)
+    APP_MANAGER.create_app(base_addr, 5)
 }
 
 pub fn run_apps() -> ! {
@@ -63,4 +69,8 @@ pub fn exit(exit_code: i32) -> ! {
 // nano time
 pub fn sleep(duration: usize) {
     APP_MANAGER.sleep(duration)
+}
+
+pub fn back_to_idle() {
+    APP_MANAGER.back_to_idle();
 }

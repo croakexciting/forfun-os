@@ -11,6 +11,6 @@ pub fn nanoseconds() -> usize {
     (time::read() * 1_000_000_000) / CLOCK_FREQ
 }
 
-pub fn set_next_trigger() {
+pub fn set_trigger() {
     set_timer((time::read() + CLOCK_FREQ / TICKS_PER_SEC) as u64)
 }
