@@ -13,7 +13,7 @@ mod config;
 
 use core::arch::global_asm;
 extern crate alloc;
-use process::{start_first_app, create_app};
+use process::{create_app, run_apps};
 use buddy_system_allocator::LockedHeap;
 
 global_asm!(include_str!("arch/riscv64/entry.asm"));
@@ -38,7 +38,7 @@ pub fn os_main() -> ! {
     init_heap();
     trap::init();
 
-    // create second on 0x80300000
+    create_app(0x80200000);
     create_app(0x80300000);
-    start_first_app();
+    run_apps();
 }

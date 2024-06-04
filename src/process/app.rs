@@ -1,6 +1,8 @@
-use core::cell::RefMut;
+use core::borrow::BorrowMut;
+use core::cell::{Ref, RefMut};
 
-use crate::config::*;
+use crate::process::switch::__switch;
+use crate::{config::*, process};
 use crate::trap::context::TrapContext;
 use crate::utils::type_extern::RefCellWrap;
 
@@ -13,6 +15,7 @@ use super::KERNEL_STACKS;
 
 
 pub struct AppManagerInner {
+    started: bool,
     current: usize,
     apps: Vec<Process>,
     idle_ctx: SwitchContext,
@@ -21,6 +24,7 @@ pub struct AppManagerInner {
 impl AppManagerInner {
     pub fn new() -> Self {
         AppManagerInner {
+            started: false,
             current: 0,
             apps: vec![],
             // idle process is a unstop loop process
@@ -29,8 +33,8 @@ impl AppManagerInner {
     }
 
     // pub fn app(&self)
-    pub fn app(&mut self, id: usize) -> RefMut<Process> {
-        self.apps[id].exclusive_access()
+    fn app(&mut self, id: usize) -> &mut Process {
+        self.apps[id].borrow_mut()
     }
 
     // get idle ctx
@@ -45,9 +49,7 @@ impl AppManagerInner {
         if app_id < MAX_APP_NUM {
             let mut process = Process::new(app_id, base_addr);
             process.set_status(ProcessStatus::READY);
-            unsafe {
-                self.apps.push(RefCellWrap::new(process));
-            }
+            self.apps.push(process);
             app_id as i32
         } else {
             error!("The app pool now is full, can't add new app");
@@ -55,15 +57,20 @@ impl AppManagerInner {
         }
     }
 
-    pub fn current_app(&mut self) -> RefMut<Process> {
+    fn current_app(&mut self) -> &mut Process {
         self.app(self.current)
     }
 
-    pub fn next_app(&mut self) -> RefMut<Process> {
-        // When the next api be called, there must be at least one apps in vector
-        let next = (self.current + 1) % self.apps.len();
-        self.current = next;
-        self.app(self.current)
+    fn next_app(&mut self) -> &mut Process {
+        assert!(self.apps.len() > 0, "The app vector is empty!!!");
+        if self.started {
+            // When the next api be called, there must be at least one apps in vector
+            let next = (self.current + 1) % self.apps.len();
+            self.app(next)
+        } else {
+            self.started = true;
+            self.app(0)
+        }
     }
 
     pub fn run_apps(&self) {
@@ -96,6 +103,10 @@ impl Process {
     pub fn set_status(&mut self, status: ProcessStatus) {
         self.status = status;
     }
+
+    pub fn ctx_ptr(&mut self) -> *mut SwitchContext {
+        self.ctx.borrow_mut() as *mut _
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -104,4 +115,75 @@ pub enum ProcessStatus {
     READY,
     RUNNING,
     EXITED,
+}
+
+pub struct AppManager {
+    inner: RefCellWrap<AppManagerInner>,
+}
+
+impl AppManager {
+    pub unsafe fn new() -> Self {
+        Self {
+            inner: RefCellWrap::new(AppManagerInner::new())
+        }
+    }
+
+    pub fn inner_access(&self) -> RefMut<'_, AppManagerInner> {
+        self.inner.exclusive_access()
+    }
+
+    pub fn run_apps(&self) -> ! {
+        use ProcessStatus::*;
+        loop {
+            let mut inner = self.inner_access();
+            let idle_ctx = inner.idle_ctx();
+            let next = inner.next_app();
+            let next_ctx_ptr = next.ctx_ptr();
+            match next.status {
+                READY => unsafe {
+                    next.set_status(RUNNING);
+                    inner.current = next.id;
+                    drop(inner);
+                    __switch(idle_ctx, next_ctx_ptr);
+                },
+                RUNNING => unsafe {
+                    inner.current = next.id;
+                    drop(inner);
+                    __switch(idle_ctx, next_ctx_ptr);
+                }
+                _ => {
+                    println!("This process not ready");
+                    continue;
+                },
+            }
+        }
+    }
+
+    pub fn back_to_idle(&self) {
+        let mut inner = self.inner_access();
+        let idle_ctx = inner.idle_ctx();
+        let current_ctx_ptr = inner.current_app().ctx_ptr();
+        drop(inner);
+        unsafe {
+            __switch(current_ctx_ptr, idle_ctx);   
+        }
+    }
+
+    pub fn exit(&self, exit_code: i32) -> ! {
+        let mut inner = self.inner_access();
+        let idle_ctx = inner.idle_ctx();
+        let current_ctx_ptr = inner.current_app().ctx_ptr();
+        inner.current_app().set_status(ProcessStatus::EXITED);
+        println!("[kernel] Application {} exited with code {}", inner.current_app().id, exit_code);
+        drop(inner);
+        unsafe {
+            __switch(current_ctx_ptr, idle_ctx);
+            unreachable!()
+        }
+    }
+
+    pub fn create_app(&self, base_addr: usize) -> i32 {
+        let mut inner = self.inner_access();
+        inner.create_app(base_addr)
+    }
 }

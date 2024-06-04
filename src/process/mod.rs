@@ -43,79 +43,22 @@ impl KernelStack {
 }
 
 lazy_static! {
-    static ref APP_MANAGER: RefCellWrap<AppManager> = unsafe {
+    static ref APP_MANAGER: AppManager = unsafe {
         // create first app
-        let mut manager = AppManager::new();
-        manager.create_app(APP_START_ADDRESS);
-        RefCellWrap::new(manager)
+        let manager = AppManager::new();
+        manager
     };
-}
-
-fn start_app(process: &Process) -> ! {
-    extern "C" {
-        fn __restore(ctx_addr: usize);
-    }
-
-    match process.status {
-        ProcessStatus::READY => unsafe {
-            let sp = KERNEL_STACKS[process.id].push_context(TrapContext::new(
-                process.base_address
-            ));
-            let mut manager = APP_MANAGER.exclusive_access();
-            manager.set_status(process.id, ProcessStatus::RUNNING);
-            drop(manager);
-            __restore(sp);
-            unreachable!()
-        },
-        _ => panic!("Process status is not ready"),
-    }
 }
 
 // Default create the first app, other app created by manual
 pub fn create_app(base_addr: usize) -> i32 {
-    let mut manager = APP_MANAGER.exclusive_access();
-    manager.create_app(base_addr)
+    APP_MANAGER.create_app(base_addr)
 }
 
-pub fn start_first_app() -> ! {
-    let manager = APP_MANAGER.exclusive_access();
-    let process = manager.app(0);
-    drop(manager);
-    start_app(&process)
+pub fn run_apps() -> ! {
+    APP_MANAGER.run_apps()
 }
 
-pub fn start_next_app() -> ! {
-    // get process status
-    let mut manager = APP_MANAGER.exclusive_access();
-    let current = manager.current_app();
-    manager.set_status(current.id, ProcessStatus::EXITED);
-    let next = manager.next_app();
-    println!("current appid is {}, next appid is {}", current.id, next.id);
-
-    drop(manager);
-    start_app(&next)
-}
-
-pub fn run_next() {
-    let mut manager = APP_MANAGER.exclusive_access();
-
-    // 创建一个 idle app，这个 app 的状态始终是 running，但是运行到它的时候，就直接 yield 出去
-    // 使得内核中始终保持一个进程的存在
-    
-}
-
-pub fn run_apps() {
-    use ProcessStatus::*;
-    loop {
-        let mut manager = APP_MANAGER.exclusive_access();
-        let process = manager.next_app().borrow_mut();
-        let idle_ctx: *mut context::SwitchContext = manager.idle_ctx();
-        match process.status {
-            READY => unsafe {
-                __switch(idle_ctx, &mut process.ctx as *mut _);
-            },
-            RUNNING => {},
-            _ => {},
-        }
-    }
+pub fn exit(exit_code: i32) -> ! {
+    APP_MANAGER.exit(exit_code)
 }

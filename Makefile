@@ -54,4 +54,7 @@ endif
 debug: build
 	qemu-system-riscv64 $(QEMU_ARGS) -s -S
 
-.PHONY: build clean run
+kill:
+	@pkill -f qemu-system-riscv
+
+.PHONY: build clean run kill

@@ -1,6 +1,5 @@
-use crate::process::start_next_app;
+use crate::process::exit;
 
 pub fn sys_exit(code: i32) -> ! {
-    println!("[kernel] Application exited with code {}", code);
-    start_next_app();
+    exit(code);
 }
