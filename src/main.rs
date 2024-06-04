@@ -11,10 +11,15 @@ mod syscall;
 mod process;
 mod config;
 
+#[cfg(feature = "riscv_qemu")]
+#[path = "board/riscv_qemu.rs"]
+mod board;
+
 use core::arch::global_asm;
 extern crate alloc;
-use process::{start_first_app, create_app};
+use process::{create_app, run_apps};
 use buddy_system_allocator::LockedHeap;
+use utils::timer;
 
 global_asm!(include_str!("arch/riscv64/entry.asm"));
 
@@ -38,7 +43,13 @@ pub fn os_main() -> ! {
     init_heap();
     trap::init();
 
-    // create second on 0x80300000
+    create_app(0x80600000);
+    create_app(0x80500000);
+    create_app(0x80400000);
     create_app(0x80300000);
-    start_first_app();
+    create_app(0x80200000);
+
+    trap::enable_timer_interrupt();
+    timer::set_trigger();
+    run_apps();
 }

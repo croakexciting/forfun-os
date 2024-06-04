@@ -10,6 +10,10 @@ pub fn console_getchar() -> usize {
     sbi_rt::legacy::console_getchar()
 }
 
+pub fn set_timer(time: u64) {
+    sbi_rt::set_timer(time);
+}
+
 pub fn shutdown(failure: bool) -> ! {
     use sbi_rt::{system_reset, NoReason, Shutdown, SystemFailure};
     if !failure {

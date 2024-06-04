@@ -1,6 +1,13 @@
-use crate::process::start_next_app;
+use crate::process::{exit, sleep};
 
 pub fn sys_exit(code: i32) -> ! {
-    println!("[kernel] Application exited with code {}", code);
-    start_next_app();
+    exit(code);
+}
+
+pub fn sys_yield() {
+    sleep(0);
+}
+
+pub fn sys_nanosleep(duration: usize) {
+    sleep(duration)
 }
