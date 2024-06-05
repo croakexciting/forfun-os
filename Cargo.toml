@@ -9,6 +9,7 @@ log = "0.4"
 riscv = "0.10.1"
 buddy_system_allocator = "0.6"
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
+bitflags = "2.5.0"
 
 [features]
 default = ["riscv_qemu"]

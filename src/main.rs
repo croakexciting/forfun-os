@@ -10,6 +10,7 @@ mod trap;
 mod syscall;
 mod process;
 mod config;
+mod mm;
 
 #[cfg(feature = "riscv_qemu")]
 #[path = "board/riscv_qemu.rs"]
