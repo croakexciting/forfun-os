@@ -3,7 +3,7 @@ ENTRY(_start)
 BASE_ADDRESS = 0x80020000;
 _heap_size = 0x100000;
 /* leave 512K for app kernel stack */
-_stack_start = 0x80180000;
+_stack_start = 0x8017FFF0;
 
 SECTIONS
 {

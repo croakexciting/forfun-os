@@ -1,3 +1,68 @@
-pub struct PhysFrameAllocator {
+use alloc::vec::Vec;
+use lazy_static::*;
+use crate::utils::type_extern::RefCellWrap;
 
+use super::basic::*;
+
+// reserve for apps
+const ALLOCATOR_START: usize = 0x80200000;
+const ALLOCATOR_END: usize = 0x807FFFF0;
+
+// This struct locate at memory
+pub struct PhysFrameAllocator {
+    current: usize,
+    end: usize,
+    recycled: Vec<usize>,
+}
+
+impl PhysFrameAllocator {
+    pub fn new(start: PhysPage, end: PhysPage) -> Self {
+        Self { current: start.0, end: end.0, recycled: Vec::new() }
+    }
+
+    // 按照顺序
+    pub fn alloc(&mut self) -> Option<PhysPage> {
+        if let Some(ppn) = self.recycled.pop() {
+            Some(ppn.into())
+        } else if self.current == self.end {
+            None
+        } else {
+            self.current += 1;
+            Some((self.current - 1).into())
+        }
+    }
+
+    pub fn dealloc(&mut self, ppn: PhysPage) {
+        if ppn.0 >= self.current || self.recycled.iter().any(|&v| v == ppn.0) {
+            // 既不在 recycled 中，也不在未分配的内存范围中
+            panic!("Frame ppn={} has not been allocated!", ppn.0);
+        }
+
+        self.recycled.push(ppn.0);
+    }
+}
+
+lazy_static! {
+    pub static ref FRAME_ALLOCATOR: RefCellWrap<PhysFrameAllocator> = unsafe {
+        let startaddr: PhysPage = PhysAddr::from(ALLOCATOR_START).into();
+        let endaddr: PhysPage = PhysAddr::from(ALLOCATOR_END).into();
+
+        RefCellWrap::new(PhysFrameAllocator::new(startaddr, endaddr))
+    };
+}
+
+pub struct PhysFrame {
+    pub ppn: PhysPage,
+}
+
+impl PhysFrame {
+    pub fn new(ppn: PhysPage) -> Self {
+        Self { ppn }
+    }
+}
+
+impl Drop for PhysFrame {
+    fn drop(&mut self) {
+        FRAME_ALLOCATOR.exclusive_access().dealloc(self.ppn);
+    }
 }

@@ -13,10 +13,10 @@ pub struct PhysAddr(pub usize);
 pub struct VirtAddr(pub usize);
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
-pub struct PhysPageNumber(pub usize);
+pub struct PhysPage(pub usize);
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
-pub struct VirtPageNumber(pub usize);
+pub struct VirtPage(pub usize);
 
 impl From<usize> for PhysAddr {
     fn from(value: usize) -> Self {
@@ -24,7 +24,7 @@ impl From<usize> for PhysAddr {
     }
 }
 
-impl From<usize> for PhysPageNumber {
+impl From<usize> for PhysPage {
     fn from(value: usize) -> Self {
         Self(value & ((1 << PPN_VALID_WIDTH) -1))
     }
@@ -36,8 +36,8 @@ impl From<PhysAddr> for usize {
     }
 }
 
-impl From<PhysPageNumber> for usize {
-    fn from(value: PhysPageNumber) -> Self {
+impl From<PhysPage> for usize {
+    fn from(value: PhysPage) -> Self {
         value.0
     }
 }
@@ -48,7 +48,7 @@ impl From<usize> for VirtAddr {
     }
 }
 
-impl From<usize> for VirtPageNumber {
+impl From<usize> for VirtPage {
     fn from(value: usize) -> Self {
         Self(value & ((1 << VPN_VALID_WIDTH) -1))
     }
@@ -60,31 +60,31 @@ impl From<VirtAddr> for usize {
     }
 }
 
-impl From<VirtPageNumber> for usize {
-    fn from(value: VirtPageNumber) -> Self {
+impl From<VirtPage> for usize {
+    fn from(value: VirtPage) -> Self {
         value.0
     }
 }
 
 impl PhysAddr {
-    pub fn page_number(&self) -> PhysPageNumber {
-        PhysPageNumber(self.0 >> INPAGE_OFFSET_WIDTH)
+    pub fn page_number(&self) -> PhysPage {
+        PhysPage(self.0 >> INPAGE_OFFSET_WIDTH)
     }
 }
 
 impl VirtAddr {
-    pub fn page_number(&self) -> VirtPageNumber {
-        VirtPageNumber(self.0 >> INPAGE_OFFSET_WIDTH)
+    pub fn page_number(&self) -> VirtPage {
+        VirtPage(self.0 >> INPAGE_OFFSET_WIDTH)
     }
 }
 
-impl From<PhysAddr> for PhysPageNumber {
+impl From<PhysAddr> for PhysPage {
     fn from(value: PhysAddr) -> Self {
         value.page_number()
     }
 }
 
-impl From<VirtAddr> for VirtPageNumber {
+impl From<VirtAddr> for VirtPage {
     fn from(value: VirtAddr) -> Self {
         value.page_number()
     }
@@ -107,12 +107,12 @@ bitflags! {
 pub struct PageTableEntry(pub usize);
 
 impl PageTableEntry {
-    pub fn new(ppn: PhysPageNumber, flags: PTEFlags) -> Self {
+    pub fn new(ppn: PhysPage, flags: PTEFlags) -> Self {
         // 8bit flags + 2bit rsw
         Self(ppn.0 << 10 | flags.bits() as usize)
     }
 
-    pub fn ppn(&self) -> PhysPageNumber {
+    pub fn ppn(&self) -> PhysPage {
         (self.0 >> 10).into()
     }
 
