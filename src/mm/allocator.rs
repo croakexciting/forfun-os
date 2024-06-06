@@ -57,6 +57,9 @@ pub struct PhysFrame {
 
 impl PhysFrame {
     pub fn new(ppn: PhysPage) -> Self {
+        // clean physcal frame
+        let addr: PhysAddr = ppn.into();
+        unsafe { core::slice::from_raw_parts_mut(addr.0 as *mut usize, 512).fill(0) };
         Self { ppn }
     }
 }
@@ -65,4 +68,8 @@ impl Drop for PhysFrame {
     fn drop(&mut self) {
         FRAME_ALLOCATOR.exclusive_access().dealloc(self.ppn);
     }
+}
+
+pub fn frame_alloc() -> Option<PhysFrame> {
+    FRAME_ALLOCATOR.exclusive_access().alloc().map(|p| PhysFrame::new(p))
 }

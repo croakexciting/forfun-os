@@ -1,6 +1,7 @@
 use core::borrow::BorrowMut;
 use core::cell::RefMut;
 
+use crate::mm::MemoryManager;
 use crate::process::switch::__switch;
 use crate::config::*;
 use crate::trap::context::TrapContext;
@@ -116,8 +117,10 @@ pub enum ProcessStatus {
     EXITED,
 }
 
+// 简化版的任务控制块，如果考虑后期加入线程的话，似乎 mm 不应该放在这
 pub struct AppManager {
     inner: RefCellWrap<AppManagerInner>,
+    mm: RefCellWrap<MemoryManager>,
 }
 
 impl AppManager {

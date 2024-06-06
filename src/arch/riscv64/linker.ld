@@ -48,7 +48,7 @@ SECTIONS
     {
         sheap = .;
         . += _heap_size;
-        . = ALIGN(4);
+        . = ALIGN(4K);
         eheap = .;
     }
 
@@ -60,6 +60,7 @@ SECTIONS
         sstack = .;
     }
 
+    . = ALIGN(4K);
     ekernel = .;
 
     /DISCARD/ : {
