@@ -11,6 +11,7 @@ buddy_system_allocator = "0.6"
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 bitflags = "2.5.0"
 xmas-elf = "0.9.1"
+derive_more = "0.99.7"
 
 [features]
 default = ["riscv_qemu"]

@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(panic_info_message)]
+#![feature(error_in_core)]
 
 mod arch;
 mod sbi;

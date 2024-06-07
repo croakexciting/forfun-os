@@ -6,14 +6,19 @@ use bitflags::bitflags;
 
 use super::{
     allocator::{frame_alloc, PhysFrame}, 
-    basic::{PTEFlags, PhysPage, VirtAddr, VirtPage, INPAGE_OFFSET_WIDTH}, 
+    basic::{
+        PTEFlags, PageTableEntry, PhysPage, 
+        VirtAddr, VirtPage, 
+        PAGE_SIZE,
+    }, 
     pt::PageTable};
 
 pub struct MapArea {
-    map_type: MapType,
-    start_vpn: VirtPage,
+    pub start_vpn: VirtPage,
     // end_vpn 是不包含在内的，也就是一个左闭右开的范围
-    end_vpn: VirtPage,
+    pub end_vpn: VirtPage,
+    
+    map_type: MapType,
     permission: Permission,
     // 放在这里只是为了在 drop 的时候自动执行 dealloc 回收这些物理页帧到 alloctor
     frames: Vec<PhysFrame>,
@@ -30,14 +35,14 @@ impl MapArea {
     ) -> Self {
         Self {
             start_vpn: start_va.into(),
-            end_vpn: VirtAddr::from(end_va.0 - 1 + (1 << INPAGE_OFFSET_WIDTH)).into(),
+            end_vpn: VirtAddr::from(end_va.0 - 1 + PAGE_SIZE).into(),
             frames: vec![],
             map_type,
             permission,
         }
     }
 
-    pub fn map_one(&mut self, pt: &mut PageTable, vpn: VirtPage) -> i32 {
+    pub fn map_one(&mut self, pt: &mut PageTable, vpn: VirtPage) -> Option<PageTableEntry> {
         let ppn: PhysPage;
         match self.map_type {
             MapType::Identical => {
@@ -65,6 +70,30 @@ impl MapArea {
         }
 
         return 0;
+    }
+
+    pub fn map_with_data(&mut self, pt: &mut PageTable, data: &[u8]) -> Result<(), &'static str>{
+        if data.len() > (self.end_vpn.0 - self.start_vpn.0) * PAGE_SIZE {
+            return Err("data length overflow");
+        }
+
+        let mut offset: usize = 0;
+        for v in self.start_vpn.0..self.end_vpn.0 {
+            // map
+            let pte = self.map_one(pt, v.into());
+
+            // copy data page by page
+            if let Some(p) = pte {
+                p.ppn().bytes_array().copy_from_slice(
+                    &data[offset..data.len().min(offset + PAGE_SIZE)]
+                );
+                offset += PAGE_SIZE;
+            } else {
+                return Err("pte map failed");
+            }
+        }
+
+        Ok(())
     }
 
     pub fn unmap(&mut self, pt: &mut PageTable) -> i32 {

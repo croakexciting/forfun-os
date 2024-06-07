@@ -77,11 +77,11 @@ impl AppManagerInner {
     }
 }
 
-#[derive(Copy, Clone)]
 pub struct Process {
     pub tick: usize,
     pub status: ProcessStatus,
     pub ctx: SwitchContext,
+    // pub mm: RefCellWrap<MemoryManager>,
 }
 
 impl Process {
@@ -120,7 +120,6 @@ pub enum ProcessStatus {
 // 简化版的任务控制块，如果考虑后期加入线程的话，似乎 mm 不应该放在这
 pub struct AppManager {
     inner: RefCellWrap<AppManagerInner>,
-    mm: RefCellWrap<MemoryManager>,
 }
 
 impl AppManager {

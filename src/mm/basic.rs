@@ -5,6 +5,7 @@ const VA_VALID_WIDTH: usize = 39;
 const PPN_VALID_WIDTH: usize = 44;
 const VPN_VALID_WIDTH: usize = 27;
 pub const INPAGE_OFFSET_WIDTH: usize = 12;
+pub const PAGE_SIZE: usize = 0x1000;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct PhysAddr(pub usize);
@@ -76,6 +77,10 @@ impl VirtAddr {
     pub fn page_number(&self) -> VirtPage {
         VirtPage(self.0 >> INPAGE_OFFSET_WIDTH)
     }
+
+    pub fn add(&self, size: usize) -> Self {
+        VirtAddr(self.0 + size)
+    }
 }
 
 impl From<PhysAddr> for PhysPage {
@@ -106,6 +111,11 @@ impl PhysPage {
     pub fn pte_array(&self) -> &'static mut [PageTableEntry] {
         let addr: PhysAddr = (*self).into();
         unsafe {core::slice::from_raw_parts_mut(addr.0 as *mut PageTableEntry, 512)}
+    }
+
+    pub fn bytes_array(&self) -> &'static mut [u8] {
+        let addr: PhysAddr = (*self).into();
+        unsafe {core::slice::from_raw_parts_mut(addr.0 as *mut u8, 4096)}
     }
 }
 

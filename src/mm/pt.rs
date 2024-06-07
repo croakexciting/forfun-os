@@ -50,14 +50,14 @@ impl PageTable {
     }
 
     // 事实上你可以将虚拟地址看成是 index，用于寻找到对应的 PTE，然后根据物理页帧信息修改 PTE
-    pub fn map(&mut self, vpn: VirtPage, ppn: PhysPage, flags: PTEFlags) -> i32 {
+    pub fn map(&mut self, vpn: VirtPage, ppn: PhysPage, flags: PTEFlags) -> Option<PageTableEntry> {
         let pte = self.find_pte(vpn).unwrap();
         if pte.is_valid() {
             // already used
-            return -1
+            return None
         }
         *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
-        return 0
+        return Some(*pte)
     }
 
     pub fn unmap(&mut self, vpn: VirtPage) -> i32 {
