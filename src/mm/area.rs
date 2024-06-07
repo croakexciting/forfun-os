@@ -19,7 +19,7 @@ pub struct MapArea {
     frames: Vec<PhysFrame>,
 }
 
-// 简单设计，一个 map area 中的内存页帧是一起创建，一起消失的
+// 简单设计，一个 map area 中的内存页帧是一起创建，一起消失的。同时起始位置必须 4K对齐
 // 比如 app 中一次 malloc 就会产生一个 map area，后续考虑类似 brk 的功能
 impl MapArea {
     pub fn new(
