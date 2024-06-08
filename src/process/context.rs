@@ -21,6 +21,10 @@ impl SwitchContext {
         }
     }
 
+    pub fn bare() -> Self {
+        Self { ra: 0, sp: 0, s: [0; 12] }
+    }
+
     pub fn new_with_restore_addr(sp: usize) -> Self {
         extern "C" {
             fn __restore();

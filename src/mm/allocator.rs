@@ -49,6 +49,10 @@ lazy_static! {
 
         RefCellWrap::new(PhysFrameAllocator::new(startaddr, endaddr))
     };
+
+    pub static ref ASID_ALLOCATOR: RefCellWrap<AsidAllocator> = unsafe {
+        RefCellWrap::new(AsidAllocator::new())
+    };
 }
 
 pub struct PhysFrame {
@@ -72,4 +76,37 @@ impl Drop for PhysFrame {
 
 pub fn frame_alloc() -> Option<PhysFrame> {
     FRAME_ALLOCATOR.exclusive_access().alloc().map(|p| PhysFrame::new(p))
+}
+
+pub struct AsidAllocator {
+    current: u16,
+    end: u16,
+    recycled: Vec<u16>,
+}
+
+impl AsidAllocator {
+    pub fn new() -> Self {
+        Self { current: 0, end: 0xFFFF, recycled: Vec::new() }
+    }
+
+    // 按照顺序
+    pub fn alloc(&mut self) -> Option<u16> {
+        if let Some(asid) = self.recycled.pop() {
+            Some(asid)
+        } else if self.current == self.end {
+            None
+        } else {
+            self.current += 1;
+            Some(self.current - 1)
+        }
+    }
+
+    pub fn dealloc(&mut self, asid: u16) {
+        if asid >= self.current || self.recycled.iter().any(|&v| v == asid) {
+            // 既不在 recycled 中，也不在未分配的内存范围中
+            panic!("Frame ppn={} has not been allocated!", asid);
+        }
+
+        self.recycled.push(asid);
+    }
 }

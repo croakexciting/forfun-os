@@ -19,7 +19,7 @@ mod board;
 
 use core::arch::global_asm;
 extern crate alloc;
-use process::{create_app, run_apps};
+use process::{activate_app, create_app, run_apps};
 use buddy_system_allocator::LockedHeap;
 use utils::timer;
 
@@ -44,14 +44,12 @@ fn init_heap() {
 pub fn os_main() -> ! {
     init_heap();
     trap::init();
-
-    create_app(0x80600000);
-    create_app(0x80500000);
-    create_app(0x80400000);
-    create_app(0x80300000);
-    create_app(0x80200000);
-
     trap::enable_timer_interrupt();
     timer::set_trigger();
+
+    let elf = unsafe { core::slice::from_raw_parts(0x9100_0000 as *mut u8, 4096*20)};
+    let app = create_app(elf);
+    // activate_app(app as usize);
+    
     run_apps();
 }

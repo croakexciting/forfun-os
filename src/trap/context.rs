@@ -9,7 +9,7 @@ pub struct TrapContext {
 }
 
 impl TrapContext {
-    pub fn new(entry: usize) -> Self {
+    pub fn new(entry: usize, sp: usize) -> Self {
         unsafe {
             // read sstatus
             let mut sstatus: usize;
@@ -20,11 +20,14 @@ impl TrapContext {
             // save the value in trap context, add will set sstatus in __restore fn
             sstatus = clear_bit(sstatus, 8);
 
-            TrapContext {
+            let mut ctx = TrapContext {
                 x: [0; 32],
                 sstatus,
                 sepc: entry,
-            }
+            };
+
+            ctx.x[2] = sp;
+            ctx
         }
     }
 }

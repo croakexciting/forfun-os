@@ -70,4 +70,8 @@ impl PageTable {
         pte.clear();
         return 0;
     }
+
+    pub fn root_ppn(&self) -> PhysPage {
+        self.root
+    }
 }

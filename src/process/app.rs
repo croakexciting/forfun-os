@@ -1,6 +1,8 @@
 use core::borrow::BorrowMut;
 use core::cell::RefMut;
+use core::arch::asm;
 
+use crate::mm::allocator::ASID_ALLOCATOR;
 use crate::mm::MemoryManager;
 use crate::process::switch::__switch;
 use crate::config::*;
@@ -11,10 +13,9 @@ use crate::utils::type_extern::RefCellWrap;
 use alloc::vec;
 use alloc::vec::Vec;
 use log::error;
+use riscv::register::satp;
 
 use super::context::SwitchContext;
-use super::KERNEL_STACKS;
-
 
 pub struct AppManagerInner {
     started: bool,
@@ -45,12 +46,13 @@ impl AppManagerInner {
     }
 
     // return app id, if create failed, return -1
-    pub fn create_app(&mut self, base_addr: usize, tick: usize) -> i32 {
+    pub fn create_app(&mut self, tick: usize, elf_data: &[u8]) -> i32 {
         // just add a process at the tail
         let app_id = self.apps.len();
         if app_id < MAX_APP_NUM {
-            let mut process = Process::new(app_id, base_addr, tick);
-            process.set_status(ProcessStatus::READY);
+            let mut process = Process::new(tick);
+            // load elf
+            process.load_elf(elf_data);
             self.apps.push(process);
             app_id as i32
         } else {
@@ -58,6 +60,10 @@ impl AppManagerInner {
             return -1;
         }
     }
+
+    pub fn activate_app(&mut self, id: usize) {
+        self.apps[id].activate();
+    } 
 
     fn current_app(&mut self) -> &mut Process {
         self.app(self.current)
@@ -80,20 +86,21 @@ impl AppManagerInner {
 pub struct Process {
     pub tick: usize,
     pub status: ProcessStatus,
-    pub ctx: SwitchContext,
-    // pub mm: RefCellWrap<MemoryManager>,
+    
+    ctx: SwitchContext,
+    mm: MemoryManager,
+    asid:u16
 }
 
 impl Process {
-    pub fn new(id: usize, base_addr: usize, tick: usize) -> Self {
+    // new 只会创建一个完全空白，无法运行的进程，需要 load_elf 才可使用
+    pub fn new(tick: usize) -> Self {
         Process {
             tick,
             status: ProcessStatus::UNINIT,
-            ctx: SwitchContext::new_with_restore_addr(
-                KERNEL_STACKS[id].push_context(
-                    TrapContext::new(base_addr)
-                )
-            ),
+            ctx: SwitchContext::bare(),
+            mm: MemoryManager::new(),
+            asid: ASID_ALLOCATOR.exclusive_access().alloc().unwrap(),
         }
     }
 
@@ -104,6 +111,33 @@ impl Process {
     pub fn ctx_ptr(&mut self) -> *mut SwitchContext {
         self.ctx.borrow_mut() as *mut _
     }
+
+    pub fn load_elf(&mut self, data: &[u8]) -> Result<(), &'static str> {
+        // 解析 elf 文件到 mm 中
+        // 请注意，这里的 sp 是用户栈 sp，而不是 app 对应的内核栈的 app
+        let (sp, pc) = self.mm.load_elf(data)?;
+
+        // 根据获取的 app pc 和 sp 创建 TrapContext
+        let trap_ctx = TrapContext::new(pc, sp);
+
+        // 将 TrapContext push 到 kernel stack 中，并且更新 switch context
+        let kernel_sp = self.mm.push_context(trap_ctx);
+        self.ctx = SwitchContext::new_with_restore_addr(kernel_sp);
+
+        // 更新 process 状态为 ready，如果没问题，此时应该可以从 idle 流进入 process
+        self.set_status(ProcessStatus::READY);
+        
+        Ok(())
+    }
+
+    // 使能虚地址模式，并且将该进程的页表写到 satp 中
+    pub fn activate(&self) {
+        let satp: usize = 8usize << 60 | (self.asid as usize) << 44 | self.mm.root_ppn().0;
+        unsafe {
+            satp::write(satp);
+            asm!("sfence.vma");
+        }
+    }    
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -218,8 +252,13 @@ impl AppManager {
         }
     }
 
-    pub fn create_app(&self, base_addr: usize, tick: usize) -> i32 {
+    pub fn create_app(&self, tick: usize, elf: &[u8]) -> i32 {
         let mut inner = self.inner_access();
-        inner.create_app(base_addr, tick)
+        inner.create_app(tick, elf)
+    }
+
+    pub fn activate_app(&self, id: usize) {
+        let mut inner = self.inner_access();
+        inner.activate_app(id)
     }
 }

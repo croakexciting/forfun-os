@@ -2,7 +2,7 @@ TARGET ?= riscv64gc-unknown-none-elf
 MODE ?= release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/forfun-os
 KERNEL_BIN := $(KERNEL_ELF).bin
-APP_BIN := appbins/hello_world.bin
+APP_BIN := appbins/hello_world
 APP_BIN2 := appbins/yield_test.bin
 APP_BIN3 := appbins/sleep_test.bin
 APP_BIN4 := appbins/loop_test.bin
@@ -23,7 +23,7 @@ K210-BOARD ?= kd233
 K210_BOOTLOADER_SIZE := 131072
 
 KERNEL_ENTRY := 0x80020000
-APP_ENTRY := 0x80200000
+APP_ENTRY := 0x91000000
 APP_ENTRY2 := 0x80300000
 APP_ENTRY3 := 0x80400000
 APP_ENTRY4 := 0x80500000
@@ -45,11 +45,7 @@ QEMU_ARGS := -machine virt \
 			 -nographic \
 			 -bios $(BOOTLOADER) \
 			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY) \
-			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY) \
-			 -device loader,file=$(APP_BIN2),addr=$(APP_ENTRY2) \
-			 -device loader,file=$(APP_BIN3),addr=$(APP_ENTRY3) \
-			 -device loader,file=$(APP_BIN4),addr=$(APP_ENTRY4) \
-			 -device loader,file=$(APP_BIN5),addr=$(APP_ENTRY5)
+			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY)
 
 run: build
 ifeq ($(BOARD), qemu)

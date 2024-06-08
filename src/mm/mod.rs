@@ -7,8 +7,10 @@ pub mod elf;
 use alloc::vec;
 use alloc::vec::Vec;
 use area::{MapArea, Permission, MapType};
-use basic::{VirtAddr, VirtPage};
+use basic::{PhysPage, VirtAddr, VirtPage};
 use pt::PageTable;
+
+use crate::trap::context::TrapContext;
 
 // 出于简单考虑，我第一步计划是将整个内存空间算作一个 map aera
 const KERNEL_START_ADDR: usize = 0x80020000;
@@ -24,9 +26,11 @@ const USER_STACK_SIZE: usize = 4096 * 2;
 // The memory manager for a process
 pub struct MemoryManager {
     pt: PageTable,
+    _kernel_area: MapArea,
+    kernel_stack_area: MapArea,
     // 用 vec 的话，无法实现 dealloc 功能，
     // 分配出去的 maparea 如何回收是个很大的问题
-    areas: Vec<MapArea>,
+    app_areas: Vec<MapArea>,
 }
 
 impl MemoryManager {
@@ -53,7 +57,23 @@ impl MemoryManager {
 
         kernel_stack_area.map(&mut pt);
 
-        Self { pt, areas: vec![kernel_area, kernel_stack_area] }
+        Self {
+            pt,
+            _kernel_area: kernel_area,
+            kernel_stack_area, 
+            app_areas: vec![], 
+        }
+    }
+
+    // return kernel stack pointer
+    pub fn push_context(&self, ctx: TrapContext) -> usize {
+        let sp: VirtAddr = self.kernel_stack_area.end_vpn.into();
+        let trap_ctx_ptr = (sp.0 - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
+        unsafe {
+            *trap_ctx_ptr = ctx;
+        }
+        trap_ctx_ptr as usize
+
     }
 
     pub fn load_elf(&mut self, data: &[u8]) -> Result<(usize, usize), &'static str>{
@@ -78,9 +98,13 @@ impl MemoryManager {
                 if ph_flags.is_execute() {
                     permission |= Permission::X;
                 }
-                let area = MapArea::new(start_va, end_va, MapType::Framed, permission);
+                let mut area = MapArea::new(start_va, end_va, MapType::Framed, permission);
+                // copy data from elf into map area
+                area.map_with_data(
+                    &mut self.pt, 
+                    &elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize])?;
                 offset = area.end_vpn;
-                self.areas.push(area);
+                self.app_areas.push(area);
             }
         }
 
@@ -88,8 +112,8 @@ impl MemoryManager {
         offset = offset.next();
 
         let user_stack_bottom: VirtAddr = offset.into();
-        let user_stack_top = user_stack_bottom.add(KERNEL_STACK_SIZE);
-        self.areas.push(
+        let user_stack_top = user_stack_bottom.add(USER_STACK_SIZE);
+        self.app_areas.push(
             MapArea::new(
                 user_stack_bottom, 
                 user_stack_top, 
@@ -99,5 +123,9 @@ impl MemoryManager {
         );
 
         Ok((user_stack_top.0, elf.header.pt2.entry_point() as usize))
+    }
+
+    pub fn root_ppn(&self) -> PhysPage {
+        self.pt.root_ppn()
     }
 }
