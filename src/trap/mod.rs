@@ -8,7 +8,11 @@ use riscv::register::{
     stvec::{self, TrapMode}
 };
 
-use crate::{process::back_to_idle, syscall::syscall, utils::timer::set_trigger};
+use crate::{
+    process::back_to_idle, 
+    syscall::syscall, 
+    utils::timer::set_trigger
+};
 
 global_asm!(include_str!("trap.S"));
 

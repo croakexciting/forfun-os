@@ -12,7 +12,6 @@ use crate::utils::type_extern::RefCellWrap;
 
 use alloc::vec;
 use alloc::vec::Vec;
-use log::error;
 use riscv::register::satp;
 
 use super::context::SwitchContext;
@@ -52,11 +51,16 @@ impl AppManagerInner {
         if app_id < MAX_APP_NUM {
             let mut process = Process::new(tick);
             // load elf
-            process.load_elf(elf_data);
+            let r = process.load_elf(elf_data);
+            if let Err(e) = r {
+                println!("load elf error: {}", e);
+                return -2;
+            }
+            println!("load elf success");
             self.apps.push(process);
             app_id as i32
         } else {
-            error!("The app pool now is full, can't add new app");
+            println!("The app pool now is full, can't add new app");
             return -1;
         }
     }
@@ -111,6 +115,10 @@ impl Process {
     pub fn ctx_ptr(&mut self) -> *mut SwitchContext {
         self.ctx.borrow_mut() as *mut _
     }
+    
+    fn satp(&mut self) -> usize {
+        8usize << 60 | (self.asid as usize) << 44 | self.mm.root_ppn().0
+    }
 
     pub fn load_elf(&mut self, data: &[u8]) -> Result<(), &'static str> {
         // 解析 elf 文件到 mm 中
@@ -124,15 +132,14 @@ impl Process {
         let kernel_sp = self.mm.push_context(trap_ctx);
         self.ctx = SwitchContext::new_with_restore_addr(kernel_sp);
 
-        // 更新 process 状态为 ready，如果没问题，此时应该可以从 idle 流进入 process
         self.set_status(ProcessStatus::READY);
-        
         Ok(())
     }
 
     // 使能虚地址模式，并且将该进程的页表写到 satp 中
-    pub fn activate(&self) {
-        let satp: usize = 8usize << 60 | (self.asid as usize) << 44 | self.mm.root_ppn().0;
+    pub fn activate(&mut self) {
+        let satp: usize = self.satp();
+        println!("satp is: {:#x}", satp);
         unsafe {
             satp::write(satp);
             asm!("sfence.vma");
@@ -190,21 +197,24 @@ impl AppManager {
             match next.status {
                 READY => unsafe {
                     next.set_status(RUNNING(next.tick));
+                    next.activate();
+                    // TODO: 需要考虑下这个地方，因为切换页表后，执行 __switch 似乎有点问题，但是 kernel 使用 identical 模式，似乎又是没问题的
                     drop(inner);
                     __switch(idle_ctx, next_ctx_ptr);
                 },
                 RUNNING(_) => unsafe {
                     next.set_status(SLEEP(nanoseconds(), 0));
+                    next.activate();
                     drop(inner);
                     __switch(idle_ctx, next_ctx_ptr);
                 }
                 SLEEP(a, b) => unsafe {
                     if a + b < nanoseconds() {
                         next.set_status(RUNNING(next.tick));
+                        next.activate();
                         drop(inner);
                         __switch(idle_ctx, next_ctx_ptr);
                     } else {
-                        // println!("[kernel] a+b is {}, current is {}", (a+b), nanoseconds());
                         continue;
                     }
                 }
@@ -244,7 +254,7 @@ impl AppManager {
         let idle_ctx = inner.idle_ctx();
         let current_ctx_ptr = inner.current_app().ctx_ptr();
         inner.current_app().set_status(ProcessStatus::EXITED);
-        // println!("[kernel] Application {} exited with code {}", inner.current_app().id, exit_code);
+        println!("[kernel] Application exited with code {}", _exit_code);
         drop(inner);
         unsafe {
             __switch(current_ctx_ptr, idle_ctx);

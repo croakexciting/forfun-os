@@ -23,7 +23,7 @@ K210-BOARD ?= kd233
 K210_BOOTLOADER_SIZE := 131072
 
 KERNEL_ENTRY := 0x80020000
-APP_ENTRY := 0x91000000
+APP_ENTRY := 0x81000000
 APP_ENTRY2 := 0x80300000
 APP_ENTRY3 := 0x80400000
 APP_ENTRY4 := 0x80500000
@@ -45,7 +45,7 @@ QEMU_ARGS := -machine virt \
 			 -nographic \
 			 -bios $(BOOTLOADER) \
 			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY) \
-			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY)
+			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY),force-raw=on
 
 run: build
 ifeq ($(BOARD), qemu)

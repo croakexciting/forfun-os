@@ -7,7 +7,7 @@ pub mod elf;
 use alloc::vec;
 use alloc::vec::Vec;
 use area::{MapArea, Permission, MapType};
-use basic::{PhysPage, VirtAddr, VirtPage};
+use basic::{PhysAddr, PhysPage, VirtAddr, VirtPage};
 use pt::PageTable;
 
 use crate::trap::context::TrapContext;
@@ -18,7 +18,7 @@ const KERNEL_END_ADDR: usize = 0x80200000;
 const KERNEL_STACK_SIZE: usize = 4096 * 2;
 // 暂定将内核栈固定在 0x9000000 这个虚拟地址，大小为 8KiB，其实地址范围是 [0x90000000 - 8KiB, 0x90000000}
 // 而且由于这一大段下面一直到内核空间都是无人使用的，相当于是一个保护页
-const KERNEL_STACK_START: usize = 0x9000000;
+const KERNEL_STACK_START: usize = 0x90000000;
 
 // 用户栈大小暂固定为 8KiB
 const USER_STACK_SIZE: usize = 4096 * 2;
@@ -28,6 +28,7 @@ pub struct MemoryManager {
     pt: PageTable,
     _kernel_area: MapArea,
     kernel_stack_area: MapArea,
+    _device_area: MapArea,
     // 用 vec 的话，无法实现 dealloc 功能，
     // 分配出去的 maparea 如何回收是个很大的问题
     app_areas: Vec<MapArea>,
@@ -57,23 +58,36 @@ impl MemoryManager {
 
         kernel_stack_area.map(&mut pt);
 
+        // 将外设地址也 map 过去
+        let mut device_area = MapArea::new(
+            VirtAddr::from(0x1000_0000), 
+            VirtAddr::from(0x1000_1000), 
+            MapType::Identical,
+            Permission::R | Permission::W | Permission::X
+        );
+
+        device_area.map(&mut pt);
+        
         Self {
             pt,
             _kernel_area: kernel_area,
             kernel_stack_area, 
+            _device_area: device_area,
             app_areas: vec![], 
         }
     }
 
     // return kernel stack pointer
-    pub fn push_context(&self, ctx: TrapContext) -> usize {
-        let sp: VirtAddr = self.kernel_stack_area.end_vpn.into();
-        let trap_ctx_ptr = (sp.0 - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
+    pub fn push_context(&mut self, ctx: TrapContext) -> usize {
+        let sp_pa = self.pt.find_pte(self.kernel_stack_area.end_vpn.prev()).unwrap().ppn().next();
+
+        let trap_ctx_ptr = (PhysAddr::from(sp_pa).0 - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
         unsafe {
             *trap_ctx_ptr = ctx;
         }
-        trap_ctx_ptr as usize
 
+        let trap_ctx_ptr_va = VirtAddr::from(self.kernel_stack_area.end_vpn).0 - core::mem::size_of::<TrapContext>();
+        trap_ctx_ptr_va as usize
     }
 
     pub fn load_elf(&mut self, data: &[u8]) -> Result<(usize, usize), &'static str>{
@@ -113,16 +127,18 @@ impl MemoryManager {
 
         let user_stack_bottom: VirtAddr = offset.into();
         let user_stack_top = user_stack_bottom.add(USER_STACK_SIZE);
+        let mut stack_area = MapArea::new(
+            user_stack_bottom, 
+            user_stack_top, 
+            MapType::Framed, 
+            Permission::R | Permission::W | Permission::U | Permission::X
+        );
+        stack_area.map(&mut self.pt);
         self.app_areas.push(
-            MapArea::new(
-                user_stack_bottom, 
-                user_stack_top, 
-                MapType::Framed,
-                Permission::R | Permission::W | Permission::U
-            )
+            stack_area
         );
 
-        Ok((user_stack_top.0, elf.header.pt2.entry_point() as usize))
+        Ok((user_stack_top.0 - 0x100, elf.header.pt2.entry_point() as usize))
     }
 
     pub fn root_ppn(&self) -> PhysPage {

@@ -117,6 +117,10 @@ impl PhysPage {
         let addr: PhysAddr = (*self).into();
         unsafe {core::slice::from_raw_parts_mut(addr.0 as *mut u8, 4096)}
     }
+
+    pub fn next(&self) -> Self {
+        Self(self.0 + 1)
+    }
 }
 
 // riscv 中页表等级从高到底叫做 2,1,0 级
@@ -136,6 +140,10 @@ impl VirtPage {
 
     pub fn next(&self) -> Self {
         Self(self.0 + 1)
+    }
+
+    pub fn prev(&self) -> Self {
+        Self(self.0 - 1)
     }
 }
 

@@ -12,6 +12,7 @@ mod syscall;
 mod process;
 mod config;
 mod mm;
+mod driver;
 
 #[cfg(feature = "riscv_qemu")]
 #[path = "board/riscv_qemu.rs"]
@@ -47,9 +48,13 @@ pub fn os_main() -> ! {
     trap::enable_timer_interrupt();
     timer::set_trigger();
 
-    let elf = unsafe { core::slice::from_raw_parts(0x9100_0000 as *mut u8, 4096*20)};
+    let elf = unsafe { core::slice::from_raw_parts(0x8100_0000 as *mut u8, 4096*100)};
     let app = create_app(elf);
-    // activate_app(app as usize);
-    
+    if app >= 0 {
+        activate_app(app as usize);
+    } else {
+        println!("create app with return code {}", app);
+    }
+
     run_apps();
 }

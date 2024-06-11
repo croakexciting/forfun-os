@@ -84,9 +84,9 @@ impl MapArea {
 
             // copy data page by page
             if let Some(p) = pte {
-                p.ppn().bytes_array().copy_from_slice(
-                    &data[offset..data.len().min(offset + PAGE_SIZE)]
-                );
+                let src = &data[offset..data.len().min(offset + PAGE_SIZE)];
+                let dst = &mut p.ppn().bytes_array()[..src.len()];
+                dst.copy_from_slice(src);
                 offset += PAGE_SIZE;
             } else {
                 return Err("pte map failed");

@@ -4,7 +4,10 @@ use core::borrow::BorrowMut;
 
 use alloc::vec;
 use alloc::vec::Vec;
-use super::{allocator::{frame_alloc, PhysFrame}, basic::{PTEFlags, PageTableEntry, PhysPage, VirtPage}};
+use super::{
+    allocator::{frame_alloc, PhysFrame}, 
+    basic::{PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage}
+};
 
 // Every app has it's own page table
 pub struct PageTable {
@@ -32,6 +35,7 @@ impl PageTable {
         let idx = vpn.index();
         let mut ppn = self.root;
         for (k, v) in idx.iter().enumerate() {
+            // TODO: 需要考虑下如何在虚地址模式下访问页表
             let pte = ppn.pte_array()[*v].borrow_mut();
             if k == 2 {
                 // 从叶子页表中获得了 PTE，直接返回
@@ -73,5 +77,14 @@ impl PageTable {
 
     pub fn root_ppn(&self) -> PhysPage {
         self.root
+    }
+
+    pub fn translate(&mut self, va: VirtAddr) -> Option<PhysAddr> {
+        let vp = VirtPage::from(va);
+        if let Some(pte) = self.find_pte(vp) {
+            let pa = pte.ppn().0 << 12 | (va.0 & (1<<12 - 1));
+            return  Some(pa.into());
+        }
+        None
     }
 }
