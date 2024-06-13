@@ -1,6 +1,9 @@
 use core::borrow::BorrowMut;
 use core::cell::RefMut;
+use core::arch::asm;
 
+use crate::mm::allocator::ASID_ALLOCATOR;
+use crate::mm::MemoryManager;
 use crate::process::switch::__switch;
 use crate::config::*;
 use crate::trap::context::TrapContext;
@@ -9,11 +12,9 @@ use crate::utils::type_extern::RefCellWrap;
 
 use alloc::vec;
 use alloc::vec::Vec;
-use log::error;
+use riscv::register::satp;
 
 use super::context::SwitchContext;
-use super::KERNEL_STACKS;
-
 
 pub struct AppManagerInner {
     started: bool,
@@ -44,19 +45,29 @@ impl AppManagerInner {
     }
 
     // return app id, if create failed, return -1
-    pub fn create_app(&mut self, base_addr: usize, tick: usize) -> i32 {
+    pub fn create_app(&mut self, tick: usize, elf_data: &[u8]) -> i32 {
         // just add a process at the tail
         let app_id = self.apps.len();
         if app_id < MAX_APP_NUM {
-            let mut process = Process::new(app_id, base_addr, tick);
-            process.set_status(ProcessStatus::READY);
+            let mut process = Process::new(tick);
+            // load elf
+            let r = process.load_elf(elf_data);
+            if let Err(e) = r {
+                println!("[kernel] load elf error: {}", e);
+                return -2;
+            }
+            println!("[kernel] load elf success");
             self.apps.push(process);
             app_id as i32
         } else {
-            error!("The app pool now is full, can't add new app");
+            println!("[kernel] The app pool now is full, can't add new app");
             return -1;
         }
     }
+
+    pub fn activate_app(&mut self, id: usize) {
+        self.apps[id].activate();
+    } 
 
     fn current_app(&mut self) -> &mut Process {
         self.app(self.current)
@@ -76,23 +87,24 @@ impl AppManagerInner {
     }
 }
 
-#[derive(Copy, Clone)]
 pub struct Process {
     pub tick: usize,
     pub status: ProcessStatus,
-    pub ctx: SwitchContext,
+    
+    ctx: SwitchContext,
+    mm: MemoryManager,
+    asid:u16
 }
 
 impl Process {
-    pub fn new(id: usize, base_addr: usize, tick: usize) -> Self {
+    // new 只会创建一个完全空白，无法运行的进程，需要 load_elf 才可使用
+    pub fn new(tick: usize) -> Self {
         Process {
             tick,
             status: ProcessStatus::UNINIT,
-            ctx: SwitchContext::new_with_restore_addr(
-                KERNEL_STACKS[id].push_context(
-                    TrapContext::new(base_addr)
-                )
-            ),
+            ctx: SwitchContext::bare(),
+            mm: MemoryManager::new(),
+            asid: ASID_ALLOCATOR.exclusive_access().alloc().unwrap(),
         }
     }
 
@@ -103,6 +115,35 @@ impl Process {
     pub fn ctx_ptr(&mut self) -> *mut SwitchContext {
         self.ctx.borrow_mut() as *mut _
     }
+    
+    fn satp(&mut self) -> usize {
+        8usize << 60 | (self.asid as usize) << 44 | self.mm.root_ppn().0
+    }
+
+    pub fn load_elf(&mut self, data: &[u8]) -> Result<(), &'static str> {
+        // 解析 elf 文件到 mm 中
+        // 请注意，这里的 sp 是用户栈 sp，而不是 app 对应的内核栈的 app
+        let (sp, pc) = self.mm.load_elf(data)?;
+
+        // 根据获取的 app pc 和 sp 创建 TrapContext
+        let trap_ctx = TrapContext::new(pc, sp);
+
+        // 将 TrapContext push 到 kernel stack 中，并且更新 switch context
+        let kernel_sp = self.mm.push_context(trap_ctx);
+        self.ctx = SwitchContext::new_with_restore_addr(kernel_sp);
+
+        self.set_status(ProcessStatus::READY);
+        Ok(())
+    }
+
+    // 使能虚地址模式，并且将该进程的页表写到 satp 中
+    pub fn activate(&mut self) {
+        let satp: usize = self.satp();
+        unsafe {
+            satp::write(satp);
+            asm!("sfence.vma");
+        }
+    }    
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -116,6 +157,7 @@ pub enum ProcessStatus {
     EXITED,
 }
 
+// 简化版的任务控制块，如果考虑后期加入线程的话，似乎 mm 不应该放在这
 pub struct AppManager {
     inner: RefCellWrap<AppManagerInner>,
 }
@@ -154,21 +196,24 @@ impl AppManager {
             match next.status {
                 READY => unsafe {
                     next.set_status(RUNNING(next.tick));
+                    next.activate();
+                    // TODO: 需要考虑下这个地方，因为切换页表后，执行 __switch 似乎有点问题，但是 kernel 使用 identical 模式，似乎又是没问题的
                     drop(inner);
                     __switch(idle_ctx, next_ctx_ptr);
                 },
                 RUNNING(_) => unsafe {
                     next.set_status(SLEEP(nanoseconds(), 0));
+                    next.activate();
                     drop(inner);
                     __switch(idle_ctx, next_ctx_ptr);
                 }
                 SLEEP(a, b) => unsafe {
                     if a + b < nanoseconds() {
                         next.set_status(RUNNING(next.tick));
+                        next.activate();
                         drop(inner);
                         __switch(idle_ctx, next_ctx_ptr);
                     } else {
-                        // println!("[kernel] a+b is {}, current is {}", (a+b), nanoseconds());
                         continue;
                     }
                 }
@@ -203,12 +248,13 @@ impl AppManager {
         }
     }
 
-    pub fn exit(&self, _exit_code: i32) -> ! {
+    pub fn exit(&self, _exit_code: Option<i32>) -> ! {
         let mut inner = self.inner_access();
         let idle_ctx = inner.idle_ctx();
         let current_ctx_ptr = inner.current_app().ctx_ptr();
         inner.current_app().set_status(ProcessStatus::EXITED);
-        // println!("[kernel] Application {} exited with code {}", inner.current_app().id, exit_code);
+        // println!("[kernel] Application exited with code {}", _exit_code);
+        // TODO: drop process resource
         drop(inner);
         unsafe {
             __switch(current_ctx_ptr, idle_ctx);
@@ -216,8 +262,13 @@ impl AppManager {
         }
     }
 
-    pub fn create_app(&self, base_addr: usize, tick: usize) -> i32 {
+    pub fn create_app(&self, tick: usize, elf: &[u8]) -> i32 {
         let mut inner = self.inner_access();
-        inner.create_app(base_addr, tick)
+        inner.create_app(tick, elf)
+    }
+
+    pub fn activate_app(&self, id: usize) {
+        let mut inner = self.inner_access();
+        inner.activate_app(id)
     }
 }

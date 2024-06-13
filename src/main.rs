@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(panic_info_message)]
+#![feature(error_in_core)]
 
 mod arch;
 mod sbi;
@@ -10,6 +11,8 @@ mod trap;
 mod syscall;
 mod process;
 mod config;
+mod mm;
+mod driver;
 
 #[cfg(feature = "riscv_qemu")]
 #[path = "board/riscv_qemu.rs"]
@@ -42,14 +45,38 @@ fn init_heap() {
 pub fn os_main() -> ! {
     init_heap();
     trap::init();
-
-    create_app(0x80600000);
-    create_app(0x80500000);
-    create_app(0x80400000);
-    create_app(0x80300000);
-    create_app(0x80200000);
-
     trap::enable_timer_interrupt();
     timer::set_trigger();
+
+    let elf1 = unsafe { core::slice::from_raw_parts(0x8100_0000 as *mut u8, 4096*100)};
+    let app1 = create_app(elf1);
+    if app1 < 0 {
+        panic!("create app1 with return code {}", app1);
+    }
+
+    let elf2 = unsafe { core::slice::from_raw_parts(0x8200_0000 as *mut u8, 4096*100)};
+    let app2 = create_app(elf2);
+    if app2 < 0 {
+        panic!("create app2 with return code {}", app2);
+    }
+
+    let elf3 = unsafe { core::slice::from_raw_parts(0x8300_0000 as *mut u8, 4096*100)};
+    let app3 = create_app(elf3);
+    if app3 < 0 {
+        panic!("create app3 with return code {}", app3);
+    }
+
+    let elf4 = unsafe { core::slice::from_raw_parts(0x8400_0000 as *mut u8, 4096*100)};
+    let app4 = create_app(elf4);
+    if app4 < 0 {
+        panic!("create app3 with return code {}", app4);
+    }
+
+    let elf5 = unsafe { core::slice::from_raw_parts(0x8500_0000 as *mut u8, 4096*100)};
+    let app5 = create_app(elf5);
+    if app5 < 0 {
+        panic!("create app3 with return code {}", app5);
+    }
+
     run_apps();
 }

@@ -1,7 +1,7 @@
 use crate::process::{exit, sleep};
 
 pub fn sys_exit(code: i32) -> ! {
-    exit(code);
+    exit(Some(code));
 }
 
 pub fn sys_yield() {
