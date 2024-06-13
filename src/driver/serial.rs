@@ -25,6 +25,7 @@ impl Uart {
         }
     }
 
+    #[allow(unused)]
     pub fn get(&self) -> char {
         unsafe {
             ptr::read_volatile(self.addr as *mut char)

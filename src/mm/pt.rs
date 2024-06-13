@@ -5,7 +5,7 @@ use core::borrow::BorrowMut;
 use alloc::vec;
 use alloc::vec::Vec;
 use super::{
-    allocator::{frame_alloc, PhysFrame}, 
+    allocator::{kernel_frame_alloc, PhysFrame}, 
     basic::{PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage}
 };
 
@@ -19,10 +19,18 @@ pub struct PageTable {
 
 impl PageTable {
     pub fn new() -> Self {
-        let frame = frame_alloc().unwrap();
+        let frame = kernel_frame_alloc().unwrap();
         Self {
             root: frame.ppn,
             frames: vec![frame],
+        }
+    }
+
+    #[allow(unused)]
+    pub fn from_ppn(ppn: usize) -> Self {
+        Self {
+            root: ppn.into(),
+            frames: Vec::new(),
         }
     }
 
@@ -42,7 +50,7 @@ impl PageTable {
                 return Some(pte)
             } else {
                 if !pte.is_valid() {
-                    let frame = frame_alloc().unwrap();
+                    let frame = kernel_frame_alloc().unwrap();
                     // 创建一个树干页表，只需要 valid flag 即可
                     *pte = PageTableEntry::new(frame.ppn, PTEFlags::V);
                     self.frames.push(frame);
@@ -79,6 +87,7 @@ impl PageTable {
         self.root
     }
 
+    #[allow(unused)]
     pub fn translate(&mut self, va: VirtAddr) -> Option<PhysAddr> {
         let vp = VirtPage::from(va);
         if let Some(pte) = self.find_pte(vp) {
@@ -87,4 +96,14 @@ impl PageTable {
         }
         None
     }
+}
+
+#[allow(unused)]
+pub fn translate(ppn: usize, va: VirtAddr) -> usize {
+    let mut pt = PageTable::from_ppn(ppn);
+    if let Some(pa) = pt.translate(va) {
+        return pa.0;
+    }
+
+    0
 }

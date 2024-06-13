@@ -5,6 +5,7 @@ use crate::utils::type_extern::RefCellWrap;
 use super::basic::*;
 
 // reserve for apps
+const KERNEL_ALLOCATOR_START: usize = 0x80150000;
 const ALLOCATOR_START: usize = 0x80200000;
 const ALLOCATOR_END: usize = 0x807FFFF0;
 
@@ -45,13 +46,20 @@ impl PhysFrameAllocator {
 lazy_static! {
     pub static ref FRAME_ALLOCATOR: RefCellWrap<PhysFrameAllocator> = unsafe {
         let startaddr: PhysPage = PhysAddr::from(ALLOCATOR_START).into();
-        let endaddr: PhysPage = PhysAddr::from(ALLOCATOR_END).into();
+        let endaddr: PhysPage = PhysAddr::from(ALLOCATOR_END - 1).into();
 
         RefCellWrap::new(PhysFrameAllocator::new(startaddr, endaddr))
     };
 
     pub static ref ASID_ALLOCATOR: RefCellWrap<AsidAllocator> = unsafe {
         RefCellWrap::new(AsidAllocator::new())
+    };
+
+    pub static ref KERNEL_FRAME_ALLOCATOR: RefCellWrap<PhysFrameAllocator> = unsafe {
+        let start_ppn: PhysPage = PhysAddr::from(KERNEL_ALLOCATOR_START).into();
+        let end_ppn: PhysPage = PhysAddr::from(ALLOCATOR_START - 1).into();
+
+        RefCellWrap::new(PhysFrameAllocator::new(start_ppn, end_ppn))
     };
 }
 
@@ -76,6 +84,10 @@ impl Drop for PhysFrame {
 
 pub fn frame_alloc() -> Option<PhysFrame> {
     FRAME_ALLOCATOR.exclusive_access().alloc().map(|p| PhysFrame::new(p))
+}
+
+pub fn kernel_frame_alloc() -> Option<PhysFrame> {
+    KERNEL_FRAME_ALLOCATOR.exclusive_access().alloc().map(|p| PhysFrame::new(p))
 }
 
 pub struct AsidAllocator {

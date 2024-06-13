@@ -139,7 +139,6 @@ impl Process {
     // 使能虚地址模式，并且将该进程的页表写到 satp 中
     pub fn activate(&mut self) {
         let satp: usize = self.satp();
-        println!("satp is: {:#x}", satp);
         unsafe {
             satp::write(satp);
             asm!("sfence.vma");
@@ -254,7 +253,7 @@ impl AppManager {
         let idle_ctx = inner.idle_ctx();
         let current_ctx_ptr = inner.current_app().ctx_ptr();
         inner.current_app().set_status(ProcessStatus::EXITED);
-        println!("[kernel] Application exited with code {}", _exit_code);
+        // println!("[kernel] Application exited with code {}", _exit_code);
         drop(inner);
         unsafe {
             __switch(current_ctx_ptr, idle_ctx);

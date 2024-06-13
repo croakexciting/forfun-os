@@ -17,3 +17,6 @@ derive_more = "0.99.7"
 default = ["riscv_qemu"]
 riscv_qemu = []
 k210 = []
+
+[profile.release]
+debug = true

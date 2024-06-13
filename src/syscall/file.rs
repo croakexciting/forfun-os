@@ -1,3 +1,4 @@
+use crate::arch::riscv64::copy_from_user_into_vector;
 
 const FD_STDOUT: usize = 1;
 
@@ -6,13 +7,9 @@ const FD_STDOUT: usize = 1;
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     match fd {
         FD_STDOUT => {
-            println!("debug0");
-            let slice = unsafe { core::slice::from_raw_parts(buf, len) };
-            println!("debug1 {:#x}", slice.as_ptr() as usize);
-            let str = core::str::from_utf8(slice).unwrap();
-            println!("debug2");
+            let data = copy_from_user_into_vector(buf, len);
+            let str = core::str::from_utf8(data.as_slice()).unwrap();
             print!("{}", str);
-            println!("debug3");
             len as isize
         }
         _ => {
