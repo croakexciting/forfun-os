@@ -48,12 +48,22 @@ pub fn os_main() -> ! {
     trap::enable_timer_interrupt();
     timer::set_trigger();
 
-    let elf = unsafe { core::slice::from_raw_parts(0x8100_0000 as *mut u8, 4096*100)};
-    let app = create_app(elf);
-    if app >= 0 {
-        activate_app(app as usize);
-    } else {
-        println!("create app with return code {}", app);
+    let elf1 = unsafe { core::slice::from_raw_parts(0x8100_0000 as *mut u8, 4096*100)};
+    let app1 = create_app(elf1);
+    if app1 < 0 {
+        panic!("create app1 with return code {}", app1);
+    }
+
+    let elf2 = unsafe { core::slice::from_raw_parts(0x8200_0000 as *mut u8, 4096*100)};
+    let app2 = create_app(elf2);
+    if app2 < 0 {
+        panic!("create app2 with return code {}", app2);
+    }
+
+    let elf3 = unsafe { core::slice::from_raw_parts(0x8300_0000 as *mut u8, 4096*100)};
+    let app3 = create_app(elf3);
+    if app3 < 0 {
+        panic!("create app3 with return code {}", app3);
     }
 
     run_apps();

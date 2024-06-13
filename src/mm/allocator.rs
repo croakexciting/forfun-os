@@ -113,6 +113,7 @@ impl AsidAllocator {
         }
     }
 
+    #[allow(unused)]
     pub fn dealloc(&mut self, asid: u16) {
         if asid >= self.current || self.recycled.iter().any(|&v| v == asid) {
             // 既不在 recycled 中，也不在未分配的内存范围中

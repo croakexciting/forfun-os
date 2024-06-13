@@ -53,14 +53,14 @@ impl AppManagerInner {
             // load elf
             let r = process.load_elf(elf_data);
             if let Err(e) = r {
-                println!("load elf error: {}", e);
+                println!("[kernel] load elf error: {}", e);
                 return -2;
             }
-            println!("load elf success");
+            println!("[kernel] load elf success");
             self.apps.push(process);
             app_id as i32
         } else {
-            println!("The app pool now is full, can't add new app");
+            println!("[kernel] The app pool now is full, can't add new app");
             return -1;
         }
     }
@@ -254,6 +254,7 @@ impl AppManager {
         let current_ctx_ptr = inner.current_app().ctx_ptr();
         inner.current_app().set_status(ProcessStatus::EXITED);
         // println!("[kernel] Application exited with code {}", _exit_code);
+        // TODO: drop process resource
         drop(inner);
         unsafe {
             __switch(current_ctx_ptr, idle_ctx);

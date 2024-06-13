@@ -72,6 +72,7 @@ impl PageTable {
         return Some(*pte)
     }
 
+    #[allow(unused)]
     pub fn unmap(&mut self, vpn: VirtPage) -> i32 {
         let pte = self.find_pte(vpn).unwrap();
         if !pte.is_valid() {

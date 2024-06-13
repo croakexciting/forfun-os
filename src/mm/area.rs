@@ -96,6 +96,7 @@ impl MapArea {
         Ok(())
     }
 
+    #[allow(unused)]
     pub fn unmap(&mut self, pt: &mut PageTable) -> i32 {
         for v in self.start_vpn.0..self.end_vpn.0 {
             self.unmap_one(pt, v.into());
