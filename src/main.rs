@@ -20,7 +20,7 @@ mod board;
 
 use core::arch::global_asm;
 extern crate alloc;
-use process::{activate_app, create_app, run_apps};
+use process::{create_app, run_apps};
 use buddy_system_allocator::LockedHeap;
 use utils::timer;
 
@@ -64,6 +64,18 @@ pub fn os_main() -> ! {
     let app3 = create_app(elf3);
     if app3 < 0 {
         panic!("create app3 with return code {}", app3);
+    }
+
+    let elf4 = unsafe { core::slice::from_raw_parts(0x8400_0000 as *mut u8, 4096*100)};
+    let app4 = create_app(elf4);
+    if app4 < 0 {
+        panic!("create app3 with return code {}", app4);
+    }
+
+    let elf5 = unsafe { core::slice::from_raw_parts(0x8500_0000 as *mut u8, 4096*100)};
+    let app5 = create_app(elf5);
+    if app5 < 0 {
+        panic!("create app3 with return code {}", app5);
     }
 
     run_apps();

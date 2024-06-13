@@ -5,8 +5,8 @@ KERNEL_BIN := $(KERNEL_ELF).bin
 APP_BIN := appbins/hello_world
 APP_BIN2 := appbins/yield_test
 APP_BIN3 := appbins/sleep_test
-APP_BIN4 := appbins/loop_test.bin
-APP_BIN5 := appbins/loop_test2.bin
+APP_BIN4 := appbins/loop_test
+APP_BIN5 := appbins/loop_test2
 
 ifeq ($(MODE), release)
 	MODE_ARG := --release
@@ -26,8 +26,8 @@ KERNEL_ENTRY := 0x80020000
 APP_ENTRY := 0x81000000
 APP_ENTRY2 := 0x82000000
 APP_ENTRY3 := 0x83000000
-APP_ENTRY4 := 0x80500000
-APP_ENTRY5 := 0x80600000
+APP_ENTRY4 := 0x84000000
+APP_ENTRY5 := 0x85000000
 
 # Binutils
 OBJDUMP := rust-objdump --arch-name=riscv64
@@ -48,7 +48,9 @@ QEMU_ARGS := -machine virt \
 			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY),force-raw=on \
 			 -device loader,file=$(APP_BIN2),addr=$(APP_ENTRY2),force-raw=on \
 			 -device loader,file=$(APP_BIN3),addr=$(APP_ENTRY3),force-raw=on \
-
+			 -device loader,file=$(APP_BIN4),addr=$(APP_ENTRY4),force-raw=on \
+			 -device loader,file=$(APP_BIN5),addr=$(APP_ENTRY5),force-raw=on
+			 
 run: build
 ifeq ($(BOARD), qemu)
 	@qemu-system-riscv64 $(QEMU_ARGS)

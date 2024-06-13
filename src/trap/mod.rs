@@ -9,7 +9,7 @@ use riscv::register::{
 };
 
 use crate::{
-    process::back_to_idle, 
+    process::{back_to_idle, exit}, 
     syscall::syscall, 
     utils::timer::set_trigger
 };
@@ -52,7 +52,18 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             set_trigger();
             back_to_idle();
-        },
+        }
+        Trap::Exception(Exception::StoreFault)
+        | Trap::Exception(Exception::StorePageFault)
+        | Trap::Exception(Exception::LoadFault)
+        | Trap::Exception(Exception::LoadPageFault) => {
+            println!("[kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.", stval, ctx.sepc);
+            exit(None);
+        }
+        Trap::Exception(Exception::IllegalInstruction) => {
+            println!("[kernel] IllegalInstruction in application, kernel killed it.");
+            exit(None);
+        }
         _ => {
             panic!(
                 "Unsupported trap {:?}, stval = {:#x}",

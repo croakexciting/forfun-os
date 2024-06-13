@@ -248,7 +248,7 @@ impl AppManager {
         }
     }
 
-    pub fn exit(&self, _exit_code: i32) -> ! {
+    pub fn exit(&self, _exit_code: Option<i32>) -> ! {
         let mut inner = self.inner_access();
         let idle_ctx = inner.idle_ctx();
         let current_ctx_ptr = inner.current_app().ctx_ptr();

@@ -37,7 +37,7 @@ pub fn run_apps() -> ! {
     APP_MANAGER.run_apps()
 }
 
-pub fn exit(exit_code: i32) -> ! {
+pub fn exit(exit_code: Option<i32>) -> ! {
     APP_MANAGER.exit(exit_code)
 }
 
