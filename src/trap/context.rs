@@ -1,6 +1,7 @@
 use crate::utils::bits::clear_bit;
 use core::arch::asm;
 
+#[derive(Clone)]
 #[repr(C)]
 pub struct TrapContext {
     pub x: [usize; 32],

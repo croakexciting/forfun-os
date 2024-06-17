@@ -71,6 +71,14 @@ impl PhysAddr {
     pub fn page_number(&self) -> PhysPage {
         PhysPage(self.0 >> INPAGE_OFFSET_WIDTH)
     }
+
+    pub fn add(&self, i: usize) -> Self {
+        Self(self.0 + i)
+    }
+
+    pub fn reduce(&self, i: usize) -> Self {
+        Self(self.0 - i)
+    }
 }
 
 impl VirtAddr {
@@ -80,6 +88,10 @@ impl VirtAddr {
 
     pub fn add(&self, size: usize) -> Self {
         VirtAddr(self.0 + size)
+    }
+
+    pub fn reduce(&self, i: usize) -> Self {
+        Self(self.0 - i)
     }
 }
 
@@ -196,5 +208,11 @@ impl PageTableEntry {
 
     pub fn clear(&mut self) {
         self.0 = 0;
+    }
+
+    pub fn clear_flag(&mut self, bit: PTEFlags) {
+        if let Some(mut p) = self.flags() {
+            p.remove(bit)
+        }
     }
 }

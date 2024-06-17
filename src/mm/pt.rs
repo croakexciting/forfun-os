@@ -15,6 +15,8 @@ pub struct PageTable {
     root: PhysPage,
     // 存储页表的物理页帧，放在这里只是为了页表实例回收的时候自动将 Frame dealloc
     frames: Vec<PhysFrame>,
+
+    index: usize,
 }
 
 impl PageTable {
@@ -23,6 +25,7 @@ impl PageTable {
         Self {
             root: frame.ppn,
             frames: vec![frame],
+            index: 0,
         }
     }
 
@@ -31,6 +34,7 @@ impl PageTable {
         Self {
             root: ppn.into(),
             frames: Vec::new(),
+            index: 0,
         }
     }
 
@@ -95,6 +99,59 @@ impl PageTable {
             let pa = pte.ppn().0 << 12 | (va.0 & (1<<12 - 1));
             return  Some(pa.into());
         }
+        None
+    }
+   
+    // find ceil 用于找到内存范围集合上限对应的物理地址
+    // 其实这个地址是用不上的，比如 0x8000 是上限，但是只有 0x7FFF 是实际使用到的地址
+    // 如果此时 0x7FFF 对应的 0x107FFF，那么 0x8000 就需要对应 0x108000，即使 0x8000 这个虚拟地址是没有被分配的
+    pub fn translate_ceil(&mut self, ceil_va: VirtAddr) -> Option<PhysAddr> {
+        let pa = self.translate(ceil_va.reduce(1))?;
+        Some(pa.add(1))
+    }
+
+    pub fn fork(&mut self, parent: &mut Self) {
+        self.index = 0;
+        for (k, v) in parent {
+            v.clear_flag(PTEFlags::W);
+            self.map(k.into(), v.ppn(), v.flags().unwrap());
+        }
+    }
+
+    pub fn kmap(&mut self, pa: PhysAddr) -> Option<PageTableEntry> {
+        let va = VirtAddr::from(pa.0);
+        self.map(va.into(), pa.into(), PTEFlags::V | PTEFlags::W | PTEFlags::R)
+    }
+
+    pub fn kunmap(&mut self, pa: PhysAddr) -> i32 {
+        let va = VirtAddr::from(pa.0);
+        self.unmap(va.into())
+    }
+}
+
+impl Iterator for PageTable {
+    type Item = (usize, &'static mut PageTableEntry);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.index < (1 << 27) {
+            let idx = VirtPage::from(self.index).index();
+            let mut ppn = self.root;
+            for (k, v) in idx.iter().enumerate() {
+                let pte = ppn.pte_array()[*v].borrow_mut();
+                if pte.is_valid() {
+                    if k == 2 {
+                        return Some((self.index, pte));
+                    } else {
+                        ppn = pte.ppn();
+                        continue;
+                    }
+                } else {
+                    self.index += 512 ^ (2-k);
+                    continue;
+                }
+            }
+        }
+
         None
     }
 }

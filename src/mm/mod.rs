@@ -13,8 +13,8 @@ use pt::PageTable;
 use crate::trap::context::TrapContext;
 
 // 出于简单考虑，我第一步计划是将整个内存空间算作一个 map aera
-const KERNEL_START_ADDR: usize = 0x80020000;
-const KERNEL_END_ADDR: usize = 0x80200000;
+const KERNEL_START_ADDR: usize = 0x80200000;
+const KERNEL_END_ADDR: usize = 0x80400000;
 const KERNEL_STACK_SIZE: usize = 4096 * 2;
 // 暂定将内核栈固定在 0x9000000 这个虚拟地址，大小为 8KiB，其实地址范围是 [0x90000000 - 8KiB, 0x90000000}
 // 而且由于这一大段下面一直到内核空间都是无人使用的，相当于是一个保护页
@@ -90,6 +90,14 @@ impl MemoryManager {
         trap_ctx_ptr_va as usize
     }
 
+    pub fn runtime_pull_context(&mut self) -> TrapContext {
+        let trap_ctx_ptr = (KERNEL_STACK_START - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
+        unsafe { 
+            let ctx = (*trap_ctx_ptr).clone();
+            ctx
+        }
+    }
+
     pub fn load_elf(&mut self, data: &[u8]) -> Result<(usize, usize), &'static str>{
         // 根据 elf 文件生成 MapArea
         let elf = elf::parse(data)?;
@@ -139,6 +147,25 @@ impl MemoryManager {
         );
 
         Ok((user_stack_top.0 - 0x100, elf.header.pt2.entry_point() as usize))
+    }
+
+    pub fn fork(&mut self, parent: &mut Self) {
+        self.pt.fork(&mut parent.pt);
+
+        let ctx = parent.runtime_pull_context();
+        let kernel_stack_pa = self.pt.translate_ceil(
+            // 所有的 memory area 都是一个左闭右开的范围，所以 end_vpn 是不被包括在内的
+            // 也就是说 end_vpn 的起始位置就是地址范围的右端，同样是不被包括在内
+            self.kernel_stack_area.end_vpn.into()
+        ).unwrap();
+        // 由于 kernel stack start 是不被包括在内的，所以需要 -1 后的地址才是实际需要 map 的虚拟地址
+        self.pt.kmap(kernel_stack_pa.reduce(1));
+        let trap_ctx_ptr = (kernel_stack_pa.0 - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
+        unsafe {
+            *trap_ctx_ptr = ctx;
+            (*trap_ctx_ptr).x[10] = 0;
+        }
+        self.pt.kunmap(kernel_stack_pa.reduce(1));
     }
 
     pub fn root_ppn(&self) -> PhysPage {

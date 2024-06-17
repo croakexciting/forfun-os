@@ -5,9 +5,9 @@ use crate::utils::type_extern::RefCellWrap;
 use super::basic::*;
 
 // reserve for apps
-const KERNEL_ALLOCATOR_START: usize = 0x80150000;
-const ALLOCATOR_START: usize = 0x80200000;
-const ALLOCATOR_END: usize = 0x807FFFF0;
+const KERNEL_ALLOCATOR_START: usize = 0x80380000;
+const ALLOCATOR_START: usize = 0x80400000;
+const ALLOCATOR_END: usize = 0x80800000;
 
 // This struct locate at memory
 pub struct PhysFrameAllocator {
@@ -102,14 +102,14 @@ impl AsidAllocator {
     }
 
     // 按照顺序
-    pub fn alloc(&mut self) -> Option<u16> {
+    pub fn alloc(&mut self) -> Option<AisdHandler> {
         if let Some(asid) = self.recycled.pop() {
-            Some(asid)
+            Some(AisdHandler(asid))
         } else if self.current == self.end {
             None
         } else {
             self.current += 1;
-            Some(self.current - 1)
+            Some(AisdHandler(self.current - 1))
         }
     }
 
@@ -122,4 +122,16 @@ impl AsidAllocator {
 
         self.recycled.push(asid);
     }
+}
+
+pub struct AisdHandler(pub u16);
+
+impl Drop for AisdHandler {
+    fn drop(&mut self) {
+        ASID_ALLOCATOR.exclusive_access().dealloc(self.0);
+    }
+}
+
+pub fn asid_alloc() -> Option<AisdHandler> {
+    ASID_ALLOCATOR.exclusive_access().alloc()
 }

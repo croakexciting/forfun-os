@@ -2,24 +2,140 @@ use core::borrow::BorrowMut;
 use core::cell::RefMut;
 use core::arch::asm;
 
-use crate::mm::allocator::ASID_ALLOCATOR;
+use crate::mm::allocator::{asid_alloc, AisdHandler};
 use crate::mm::MemoryManager;
 use crate::process::switch::__switch;
-use crate::config::*;
 use crate::trap::context::TrapContext;
 use crate::utils::timer::nanoseconds;
 use crate::utils::type_extern::RefCellWrap;
 
-use alloc::vec;
+use alloc::sync::{Arc, Weak};
+use spin::mutex::Mutex;
+use alloc::{format, vec};
 use alloc::vec::Vec;
 use riscv::register::satp;
 
 use super::context::SwitchContext;
+use super::pid::{self, PidHandler};
+
+pub struct TaskManager {
+    inner: RefCellWrap<AppManagerInner>,
+}
+
+impl TaskManager {
+    pub unsafe fn new() -> Self {
+        Self {
+            inner: RefCellWrap::new(AppManagerInner::new())
+        }
+    }
+
+    pub fn inner_access(&self) -> RefMut<'_, AppManagerInner> {
+        self.inner.exclusive_access()
+    }
+
+    pub fn run_task(&self) -> ! {
+        use ProcessStatus::*;
+        loop {
+            let mut inner = self.inner_access();
+            let idle_ctx = inner.idle_ctx();
+            // 暂时简化处理，如果获取不到当前任务，会直接 panic
+            let current = inner.current_task().unwrap();
+            let current_status = current.lock().status;
+            if let RUNNING(tick) = current_status {
+                if tick - 1 > 0 {
+                    let current_ctx_ptr = current.lock().ctx_ptr();
+                    current.lock().set_status(RUNNING(tick - 1));
+                    drop(inner);
+                    unsafe {__switch(idle_ctx, current_ctx_ptr);}
+                    continue;
+                }
+            }
+
+            let next = inner.next_task().unwrap();
+            let next_ctx_ptr = next.lock().ctx_ptr();
+            let next_status = next.lock().status;
+            match next_status {
+                READY => unsafe {
+                    let tick = next.lock().tick;
+                    next.lock().set_status(RUNNING(tick));
+                    next.lock().activate();
+                    // TODO: 需要考虑下这个地方，因为切换页表后，执行 __switch 似乎有点问题，但是 kernel 使用 identical 模式，似乎又是没问题的
+                    drop(inner);
+                    unsafe { __switch(idle_ctx, next_ctx_ptr); }
+                },
+                RUNNING(_) => unsafe {
+                    next.lock().set_status(SLEEP(nanoseconds(), 0));
+                    next.lock().activate();
+                    drop(inner);
+                    unsafe { __switch(idle_ctx, next_ctx_ptr); }
+                }
+                SLEEP(a, b) => unsafe {
+                    if a + b < nanoseconds() {
+                        let tick = next.lock().tick;
+                        next.lock().set_status(RUNNING(tick));
+                        next.lock().activate();
+                        drop(inner);
+                        unsafe { __switch(idle_ctx, next_ctx_ptr); }
+                    } else {
+                        continue;
+                    }
+                }
+                _ => {
+                    continue;
+                },
+            }
+        }
+    }
+
+    pub fn back_to_idle(&self) {
+        let mut inner = self.inner_access();
+        let idle_ctx = inner.idle_ctx();
+        let current_ctx_ptr = inner.current_task().unwrap().lock().ctx_ptr();
+        drop(inner);
+        unsafe { __switch(current_ctx_ptr, idle_ctx); }
+    }
+
+    pub fn sleep(&self, duration: usize) {
+        let mut inner = self.inner_access();
+        let current = inner.current_task().unwrap();
+        current.lock().set_status(ProcessStatus::SLEEP(nanoseconds(), duration));
+        drop(inner);
+
+        self.back_to_idle();
+    }
+
+    pub fn exit(&self, exit_code: isize) -> ! {
+        let mut inner = self.inner_access();
+        let current = inner.current_task().unwrap();
+        let idle_ctx = inner.idle_ctx();
+        let current_ctx_ptr = current.lock().ctx_ptr();
+        current.lock().set_status(ProcessStatus::EXITED(exit_code));
+        drop(inner);
+        unsafe {
+            __switch(current_ctx_ptr, idle_ctx);
+            unreachable!()
+        }
+    }
+
+    pub fn fork(&self) -> isize {
+        let mut inner = self.inner_access();
+        inner.fork()
+    }
+
+    pub fn create_initproc(&self, tick: usize, elf: &[u8]) -> isize {
+        let mut inner = self.inner_access();
+        inner.create_initproc(tick, elf)
+    }
+}
 
 pub struct AppManagerInner {
     started: bool,
     current: usize,
-    apps: Vec<Process>,
+    
+    // 这里存储的是 initproc 的实例
+    initproc: Option<Arc<Mutex<Process>>>,
+    // 存储 process 的 weak pointer, 用于调度
+    tasks: Vec<Weak<Mutex<Process>>>,
     idle_ctx: SwitchContext,
 }
 
@@ -28,16 +144,22 @@ impl AppManagerInner {
         AppManagerInner {
             started: false,
             current: 0,
-            apps: vec![],
+            initproc: None,
+            tasks: vec![],
             // idle process is a unstop loop process
             idle_ctx: SwitchContext::new(0, 0),
         }
     }
 
     // pub fn app(&self)
-    fn app(&mut self, id: usize) -> &mut Process {
-        self.apps[id].borrow_mut()
+    fn task(&mut self, id: usize) -> Result<Arc<Mutex<Process>>, &'static str> {
+        if let Some(task) = self.tasks[id].upgrade() {
+            Ok(task)
+        } else {
+            Err("task instance not exists now.")
+        }
     }
+
 
     // get idle ctx
     pub fn idle_ctx(&mut self) -> *mut SwitchContext {
@@ -45,55 +167,66 @@ impl AppManagerInner {
     }
 
     // return app id, if create failed, return -1
-    pub fn create_app(&mut self, tick: usize, elf_data: &[u8]) -> i32 {
+    // only initproc is created, other's created by fork
+    pub fn create_initproc(&mut self, tick: usize, elf_data: &[u8]) -> isize {
         // just add a process at the tail
-        let app_id = self.apps.len();
-        if app_id < MAX_APP_NUM {
-            let mut process = Process::new(tick);
-            // load elf
-            let r = process.load_elf(elf_data);
-            if let Err(e) = r {
-                println!("[kernel] load elf error: {}", e);
-                return -2;
-            }
-            println!("[kernel] load elf success");
-            self.apps.push(process);
-            app_id as i32
-        } else {
-            println!("[kernel] The app pool now is full, can't add new app");
+        let mut initproc = Process::new(tick);
+        // load elf
+        let r = initproc.load_elf(elf_data);
+        if let Err(e) = r {
+            println!("[kernel] initproc load elf error: {}", e);
             return -1;
         }
+        println!("[kernel] initproc load elf success");
+        let initproc_arc = Arc::new(Mutex::new(initproc));
+        self.tasks.push(Arc::downgrade(&initproc_arc));
+        self.initproc = Some(initproc_arc);
+        0
     }
 
-    pub fn activate_app(&mut self, id: usize) {
-        self.apps[id].activate();
+    pub fn activate_task(&mut self, id: usize) -> Result<(), &'static str> {
+        if let Some(task) = self.tasks[id].upgrade() {
+            Ok(())
+        } else {
+            Err("task instance not exists now.")
+        }
     } 
 
-    fn current_app(&mut self) -> &mut Process {
-        self.app(self.current)
+    fn current_task(&mut self) -> Result<Arc<Mutex<Process>>, &'static str> {
+        self.task(self.current)
     }
 
-    fn next_app(&mut self) -> &mut Process {
-        assert!(self.apps.len() > 0, "The app vector is empty!!!");
+    fn next_task(&mut self) -> Result<Arc<Mutex<Process>>, &'static str> {
+        assert!(self.tasks.len() > 0, "The app vector is empty!!!");
         if self.started {
             // When the next api be called, there must be at least one apps in vector
-            let next = (self.current + 1) % self.apps.len();
+            let next = (self.current + 1) % self.tasks.len();
             self.current = next;
-            self.app(next)
+            self.task(next)
         } else {
             self.started = true;
-            self.app(0)
+            self.task(0)
         }
+    }
+
+    pub fn fork(&mut self) -> isize {
+        let child = self.current_task().unwrap().lock().fork();
+        let pid = child.upgrade().unwrap().lock().pid.0;
+        self.tasks.push(child);
+        pid as isize
     }
 }
 
 pub struct Process {
     pub tick: usize,
     pub status: ProcessStatus,
+    pub pid: PidHandler,
+    pub parent: Option<usize>,
+    pub children: Vec<Arc<Mutex<Self>>>,
     
     ctx: SwitchContext,
     mm: MemoryManager,
-    asid:u16
+    asid: AisdHandler,
 }
 
 impl Process {
@@ -102,10 +235,34 @@ impl Process {
         Process {
             tick,
             status: ProcessStatus::UNINIT,
+            pid: pid::alloc().unwrap(),
+            parent: None,
+            children: Vec::new(),
             ctx: SwitchContext::bare(),
             mm: MemoryManager::new(),
-            asid: ASID_ALLOCATOR.exclusive_access().alloc().unwrap(),
+            asid: asid_alloc().unwrap(),
         }
+    }
+
+    pub fn fork(&mut self) -> Weak<Mutex<Self>> {
+        let mut mm = MemoryManager::new();
+        mm.fork(&mut self.mm);
+        let child = Arc::new(Mutex::new(
+            Self {
+                tick: self.tick,
+                status: ProcessStatus::READY,
+                pid: pid::alloc().unwrap(),
+                parent: Some(self.pid.0),
+                children: Vec::new(),
+                ctx: self.ctx,
+                mm,
+                asid: asid_alloc().unwrap(),
+            }
+        ));
+
+        let weak = Arc::downgrade(&child);
+        self.children.push(child);
+        weak
     }
 
     pub fn set_status(&mut self, status: ProcessStatus) {
@@ -117,7 +274,7 @@ impl Process {
     }
     
     fn satp(&mut self) -> usize {
-        8usize << 60 | (self.asid as usize) << 44 | self.mm.root_ppn().0
+        8usize << 60 | (self.asid.0 as usize) << 44 | self.mm.root_ppn().0
     }
 
     pub fn load_elf(&mut self, data: &[u8]) -> Result<(), &'static str> {
@@ -143,7 +300,7 @@ impl Process {
             satp::write(satp);
             asm!("sfence.vma");
         }
-    }    
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -154,121 +311,5 @@ pub enum ProcessStatus {
     RUNNING(usize),
     // sleep status with start and duration timestamp(ns) 
     SLEEP(usize, usize),
-    EXITED,
-}
-
-// 简化版的任务控制块，如果考虑后期加入线程的话，似乎 mm 不应该放在这
-pub struct AppManager {
-    inner: RefCellWrap<AppManagerInner>,
-}
-
-impl AppManager {
-    pub unsafe fn new() -> Self {
-        Self {
-            inner: RefCellWrap::new(AppManagerInner::new())
-        }
-    }
-
-    pub fn inner_access(&self) -> RefMut<'_, AppManagerInner> {
-        self.inner.exclusive_access()
-    }
-
-    pub fn run_apps(&self) -> ! {
-        use ProcessStatus::*;
-        loop {
-            let mut inner = self.inner_access();
-            let idle_ctx = inner.idle_ctx();
-
-            // 更新当前任务时间片，如果时间片还有剩余，切换回当前任务
-            let current = inner.current_app();
-            if let RUNNING(tick) = current.status {
-                if tick - 1 > 0 {
-                    let current_ctx_ptr = current.ctx_ptr();
-                    current.set_status(RUNNING(tick - 1));
-                    drop(inner);
-                    unsafe {__switch(idle_ctx, current_ctx_ptr);}
-                    continue;
-                }
-            }
-
-            let next = inner.next_app();
-            let next_ctx_ptr = next.ctx_ptr();
-            match next.status {
-                READY => unsafe {
-                    next.set_status(RUNNING(next.tick));
-                    next.activate();
-                    // TODO: 需要考虑下这个地方，因为切换页表后，执行 __switch 似乎有点问题，但是 kernel 使用 identical 模式，似乎又是没问题的
-                    drop(inner);
-                    __switch(idle_ctx, next_ctx_ptr);
-                },
-                RUNNING(_) => unsafe {
-                    next.set_status(SLEEP(nanoseconds(), 0));
-                    next.activate();
-                    drop(inner);
-                    __switch(idle_ctx, next_ctx_ptr);
-                }
-                SLEEP(a, b) => unsafe {
-                    if a + b < nanoseconds() {
-                        next.set_status(RUNNING(next.tick));
-                        next.activate();
-                        drop(inner);
-                        __switch(idle_ctx, next_ctx_ptr);
-                    } else {
-                        continue;
-                    }
-                }
-                _ => {
-                    continue;
-                },
-            }
-        }
-    }
-
-    pub fn back_to_idle(&self) {
-        let mut inner = self.inner_access();
-        let idle_ctx = inner.idle_ctx();
-        let current_ctx_ptr = inner.current_app().ctx_ptr();
-        drop(inner);
-        unsafe {
-            __switch(current_ctx_ptr, idle_ctx);   
-        }
-    }
-
-    pub fn sleep(&self, duration: usize) {
-        let mut inner = self.inner_access();
-        let idle_ctx = inner.idle_ctx();
-        let current_app = inner.current_app();
-        
-        // set current time and sleep time
-        current_app.set_status(ProcessStatus::SLEEP(nanoseconds(), duration));
-        let current_ctx_ptr: *mut SwitchContext = current_app.ctx_ptr();
-        drop(inner);
-        unsafe {
-            __switch(current_ctx_ptr, idle_ctx);
-        }
-    }
-
-    pub fn exit(&self, _exit_code: Option<i32>) -> ! {
-        let mut inner = self.inner_access();
-        let idle_ctx = inner.idle_ctx();
-        let current_ctx_ptr = inner.current_app().ctx_ptr();
-        inner.current_app().set_status(ProcessStatus::EXITED);
-        // println!("[kernel] Application exited with code {}", _exit_code);
-        // TODO: drop process resource
-        drop(inner);
-        unsafe {
-            __switch(current_ctx_ptr, idle_ctx);
-            unreachable!()
-        }
-    }
-
-    pub fn create_app(&self, tick: usize, elf: &[u8]) -> i32 {
-        let mut inner = self.inner_access();
-        inner.create_app(tick, elf)
-    }
-
-    pub fn activate_app(&self, id: usize) {
-        let mut inner = self.inner_access();
-        inner.activate_app(id)
-    }
+    EXITED(isize),
 }

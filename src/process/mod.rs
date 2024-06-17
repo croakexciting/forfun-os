@@ -3,49 +3,47 @@
 pub mod app;
 pub mod switch;
 pub mod context;
+pub mod pid;
 
 use app::*;
+use alloc::sync::Arc;
+use spin::mutex::Mutex;
 
 use crate::{
-    config::*, trap::context::TrapContext
+    trap::context::TrapContext, utils::type_extern::RefCellWrap
 };
 
 use lazy_static::*;
 
 lazy_static! {
-    static ref APP_MANAGER: AppManager = unsafe {
-        // create first app
-        let manager = AppManager::new();
-        manager
+    static ref TASK_MANAGER: Arc<TaskManager> = unsafe {
+        Arc::new(TaskManager::new())
     };
 }
 
 // Default create the first app, other app created by manual
-pub fn create_app_with_tick(tick: usize, elf: &[u8]) -> i32 {
-    APP_MANAGER.create_app(tick, elf)
+pub fn create_proc() -> isize {
+    let elf = unsafe { core::slice::from_raw_parts(0x8100_0000 as *mut u8, 4096*100)};
+    TASK_MANAGER.create_initproc(5, elf)
 }
 
-pub fn create_app(elf: &[u8]) -> i32 {
-    APP_MANAGER.create_app(5, elf)
+pub fn run_tasks() -> ! {
+    TASK_MANAGER.run_task()
 }
 
-pub fn activate_app(id: usize) {
-    APP_MANAGER.activate_app(id);
+pub fn fork() -> isize {
+    TASK_MANAGER.fork()
 }
 
-pub fn run_apps() -> ! {
-    APP_MANAGER.run_apps()
-}
-
-pub fn exit(exit_code: Option<i32>) -> ! {
-    APP_MANAGER.exit(exit_code)
+pub fn exit(exit_code: isize) -> ! {
+    TASK_MANAGER.exit(exit_code)
 }
 
 // nano time
 pub fn sleep(duration: usize) {
-    APP_MANAGER.sleep(duration)
+    TASK_MANAGER.sleep(duration)
 }
 
 pub fn back_to_idle() {
-    APP_MANAGER.back_to_idle();
+    TASK_MANAGER.back_to_idle();
 }

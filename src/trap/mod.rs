@@ -1,6 +1,5 @@
 pub mod context;
 
-use core::arch::global_asm;
 use context::TrapContext;
 use riscv::register::{
     scause::{self, Exception, Trap, Interrupt}, 
@@ -13,8 +12,6 @@ use crate::{
     syscall::syscall, 
     utils::timer::set_trigger
 };
-
-global_asm!(include_str!("trap.S"));
 
 pub fn init() {
     extern "C" {
@@ -58,11 +55,11 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
             println!("[kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.", stval, ctx.sepc);
-            exit(None);
+            exit(-1001);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             println!("[kernel] IllegalInstruction in application, kernel killed it.");
-            exit(None);
+            exit(-1002);
         }
         _ => {
             panic!(
