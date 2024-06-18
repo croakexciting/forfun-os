@@ -150,10 +150,12 @@ impl MemoryManager {
     }
 
     pub fn fork(&mut self, parent: &mut Self) {
-        self.pt.fork(&mut parent.pt);
-
         // 将父进程的所有 app area 复制一份，并且为 physframe 计数 +1
-        self.app_areas = parent.app_areas.clone();
+        self.app_areas.reserve(parent.app_areas.len());
+        for area in parent.app_areas.iter() {
+            let new_area = area.fork(&mut parent.pt, &mut self.pt);
+            self.app_areas.push(new_area);
+        }
 
         let ctx = parent.runtime_pull_context();
         let kernel_stack_pa = self.pt.translate_ceil(
@@ -162,13 +164,13 @@ impl MemoryManager {
             self.kernel_stack_area.end_vpn.into()
         ).unwrap();
         // 由于 kernel stack start 是不被包括在内的，所以需要 -1 后的地址才是实际需要 map 的虚拟地址
-        self.pt.kmap(kernel_stack_pa.reduce(1));
+        parent.pt.kmap(kernel_stack_pa.reduce(1));
         let trap_ctx_ptr = (kernel_stack_pa.0 - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
         unsafe {
             *trap_ctx_ptr = ctx;
             (*trap_ctx_ptr).x[10] = 0;
         }
-        self.pt.kunmap(kernel_stack_pa.reduce(1));
+        parent.pt.kunmap(kernel_stack_pa.reduce(1));
     }
 
     pub fn root_ppn(&self) -> PhysPage {

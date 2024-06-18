@@ -32,10 +32,7 @@ pub fn run_tasks() -> ! {
 }
 
 pub fn fork() -> isize {
-    println!("fork!!!");
-    TASK_MANAGER.fork();
-    println!("back to fork");
-    0
+    TASK_MANAGER.fork()
 }
 
 pub fn exit(exit_code: isize) -> ! {
@@ -48,11 +45,9 @@ pub fn sleep(duration: usize) {
 }
 
 pub fn back_to_idle() {
-    println!("back to idle");
     TASK_MANAGER.back_to_idle();
 }
 
 pub fn remap(va: usize) -> Result<(), &'static str> {
-    println!("remap");
     TASK_MANAGER.remap(VirtAddr::from(va).into())
 }

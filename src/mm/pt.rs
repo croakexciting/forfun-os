@@ -22,9 +22,13 @@ pub struct PageTable {
 impl PageTable {
     pub fn new() -> Self {
         let frame = kernel_frame_alloc().unwrap();
+        let ppn = frame.ppn.clone();
+        let mut frames: Vec<PhysFrame> = Vec::new();
+        frames.reserve(8);
+        frames.push(frame);
         Self {
-            root: frame.ppn,
-            frames: vec![frame],
+            root: ppn,
+            frames,
             index: 0,
         }
     }
@@ -65,6 +69,15 @@ impl PageTable {
         None
     }
 
+    pub fn find_valid_pte(&mut self, vpn: VirtPage) -> Option<PageTableEntry> {
+        let pte = self.find_pte(vpn).unwrap();
+        if pte.is_valid() {
+            return Some(pte.clone());
+        }
+
+        None
+    }
+
     // 事实上你可以将虚拟地址看成是 index，用于寻找到对应的 PTE，然后根据物理页帧信息修改 PTE
     pub fn map(&mut self, vpn: VirtPage, ppn: PhysPage, flags: PTEFlags) -> Option<PageTableEntry> {
         let pte = self.find_pte(vpn).unwrap();
@@ -87,6 +100,15 @@ impl PageTable {
         pte.clear();
         return 0;
     }
+    
+    pub fn remap(&mut self, vpn: VirtPage, ppn: PhysPage, flags: PTEFlags) -> Option<PageTableEntry> {
+        if self.unmap(vpn) < 0 {
+            return None
+        }
+
+        self.map(vpn, ppn, flags)
+    }
+
 
     pub fn root_ppn(&self) -> PhysPage {
         self.root
@@ -96,7 +118,7 @@ impl PageTable {
     pub fn translate(&mut self, va: VirtAddr) -> Option<PhysAddr> {
         let vp = VirtPage::from(va);
         if let Some(pte) = self.find_pte(vp) {
-            let pa = pte.ppn().0 << 12 | (va.0 & (1<<12 - 1));
+            let pa = pte.ppn().0 << 12 | (va.0 & ((1<<12) - 1));
             return  Some(pa.into());
         }
         None
@@ -110,13 +132,13 @@ impl PageTable {
         Some(pa.add(1))
     }
 
-    pub fn fork(&mut self, parent: &mut Self) {
-        self.index = 0;
-        for (k, v) in parent {
-            v.clear_flag(PTEFlags::W);
-            self.map(k.into(), v.ppn(), v.flags().unwrap());
-        }
-    }
+    // pub fn fork(&mut self, parent: &mut Self) {
+    //     self.index = 0;
+    //     for (k, v) in parent {
+    //         v.clear_flag(PTEFlags::W);
+    //         self.map(k.into(), v.ppn(), v.flags().unwrap());
+    //     }
+    // }
 
     pub fn kmap(&mut self, pa: PhysAddr) -> Option<PageTableEntry> {
         let va = VirtAddr::from(pa.0);

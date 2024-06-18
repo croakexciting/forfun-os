@@ -53,12 +53,12 @@ impl MapArea {
                 ppn = PhysPage(vpn.0);
             }
             MapType::Framed => {
-                let frame = frame_alloc().unwrap();
+                let frame = frame_alloc()?;
                 ppn = frame.ppn;
                 self.frames.insert(vpn.0, Arc::new(frame));
             }
         }
-        let pte_flag = PTEFlags::from_bits(self.permission.bits()).unwrap();
+        let pte_flag = PTEFlags::from_bits(self.permission.bits())?;
         pt.map(vpn, ppn, pte_flag)
     }
 
@@ -108,6 +108,28 @@ impl MapArea {
         return 0;
     }
 
+    pub fn fork(&self, pt: &mut PageTable, child_pt: &mut PageTable) -> Self {
+        let mut child_frames: BTreeMap<usize, Arc<PhysFrame>> = BTreeMap::new();
+
+        for (k, v) in self.frames.iter() {
+            let pte = pt.find_valid_pte((*k).into()).unwrap();
+            let mut flags = pte.flags().unwrap();
+            flags.remove(PTEFlags::W);
+
+            child_pt.map((*k).into(), v.ppn, flags).unwrap();
+            pt.remap((*k).into(), v.ppn, flags).unwrap();
+            child_frames.insert(*k, v.clone());
+        }
+        
+        Self {
+            start_vpn: self.start_vpn,
+            end_vpn: self.end_vpn,
+            map_type: self.map_type,
+            permission: self.permission,
+            frames: child_frames,
+        } 
+    }
+
     pub fn remap(&mut self, pt: &mut PageTable, vpn: VirtPage) -> Result<(), &'static str> {
         if (self.unmap_one(pt, vpn)) < 0 {
             return Err("unmap failed");
@@ -130,7 +152,7 @@ pub enum MapType {
 
 bitflags! {
     /// map permission corresponding to that in pte: `R W X U`
-    #[derive(Clone)]
+    #[derive(Copy, Clone)]
     pub struct Permission: u8 {
         const R = 1 << 1;
         const W = 1 << 2;

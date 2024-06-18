@@ -54,7 +54,7 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
         | Trap::Exception(Exception::StorePageFault)
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
-            println!("[kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}.", stval, ctx.sepc);
+            println!("[kernel] pagefault in application, bad addr = {:#x}, bad instruction = {:#x}.", stval, ctx.sepc);
             let r = remap(stval);
             match r {
                 Ok(_) => {

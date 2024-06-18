@@ -31,7 +31,6 @@ impl TaskManager {
     }
 
     pub fn inner_access(&self) -> RefMut<'_, AppManagerInner> {
-        println!("take owner");
         self.inner.exclusive_access()
     }
 
@@ -48,7 +47,6 @@ impl TaskManager {
                     let current_ctx_ptr = current.lock().ctx_ptr();
                     current.lock().set_status(RUNNING(tick - 1));
                     drop(inner);
-                    println!("give back owner");
                     unsafe {__switch(idle_ctx, current_ctx_ptr);}
                     continue;
                 }
@@ -64,7 +62,6 @@ impl TaskManager {
                     next.lock().activate();
                     // TODO: 需要考虑下这个地方，因为切换页表后，执行 __switch 似乎有点问题，但是 kernel 使用 identical 模式，似乎又是没问题的
                     drop(inner);
-                    println!("give back owner");
 
                     unsafe { __switch(idle_ctx, next_ctx_ptr); }
                 },
@@ -72,7 +69,6 @@ impl TaskManager {
                     next.lock().set_status(SLEEP(nanoseconds(), 0));
                     next.lock().activate();
                     drop(inner);
-                    println!("give back owner");
                     unsafe { __switch(idle_ctx, next_ctx_ptr); }
                 }
                 SLEEP(a, b) => unsafe {
@@ -81,7 +77,6 @@ impl TaskManager {
                         next.lock().set_status(RUNNING(tick));
                         next.lock().activate();
                         drop(inner);
-                        println!("give back owner");
                         unsafe { __switch(idle_ctx, next_ctx_ptr); }
                     } else {
                         continue;
@@ -99,7 +94,6 @@ impl TaskManager {
         let idle_ctx = inner.idle_ctx();
         let current_ctx_ptr = inner.current_task().unwrap().lock().ctx_ptr();
         drop(inner);
-        println!("give back owner");
         unsafe { __switch(current_ctx_ptr, idle_ctx); }
     }
 
@@ -118,6 +112,7 @@ impl TaskManager {
         let idle_ctx = inner.idle_ctx();
         let current_ctx_ptr = current.lock().ctx_ptr();
         current.lock().set_status(ProcessStatus::EXITED(exit_code));
+        let pid = current.lock().pid.clone();
         drop(inner);
         unsafe {
             __switch(current_ctx_ptr, idle_ctx);
