@@ -4,7 +4,6 @@ pub mod allocator;
 pub mod area;
 pub mod elf;
 
-use alloc::vec;
 use alloc::vec::Vec;
 use area::{MapArea, Permission, MapType};
 use basic::{PhysAddr, PhysPage, VirtAddr, VirtPage};
@@ -67,13 +66,16 @@ impl MemoryManager {
         );
 
         device_area.map(&mut pt);
+
+        let mut app_areas: Vec<MapArea> = Vec::new();
+        app_areas.reserve(8);
         
         Self {
             pt,
             _kernel_area: kernel_area,
             kernel_stack_area, 
             _device_area: device_area,
-            app_areas: vec![], 
+            app_areas, 
         }
     }
 

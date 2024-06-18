@@ -2,6 +2,8 @@
 #![no_main]
 #![feature(panic_info_message)]
 #![feature(error_in_core)]
+#![feature(alloc_error_handler)]
+#![feature(const_slice_from_raw_parts_mut)]
 
 mod arch;
 mod sbi;
@@ -19,15 +21,13 @@ mod board;
 
 use core::arch::global_asm;
 extern crate alloc;
-use process::{create_proc, run_tasks};
+use process::{app::Process, create_proc, run_tasks};
 use buddy_system_allocator::LockedHeap;
 use utils::timer;
 
 global_asm!(include_str!("arch/riscv64/entry.asm"));
 global_asm!(include_str!("trap/trap.S"));
 global_asm!(include_str!("process/switch.S"));
-
-static mut HEAP_SPACE: [u8; 0x100000] = [0; 0x100000];
 
 fn clear_bss() {
     extern "C" {
@@ -44,11 +44,21 @@ fn clear_bss() {
 /// heap allocator instance
 static HEAP_ALLOCATOR: LockedHeap = LockedHeap::empty();
 
+#[alloc_error_handler]
+/// panic when heap allocation error occurs
+pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
+    panic!("Heap allocation error, layout = {:?}", layout);
+}
+
 pub fn init_heap() {
+    extern "C" {
+        fn sheap();
+        fn eheap();
+    }
     unsafe {
         HEAP_ALLOCATOR
             .lock()
-            .init(HEAP_SPACE.as_ptr() as usize, 0x100000);
+            .init(sheap as usize, eheap as usize - sheap as usize);
     }
 }
 

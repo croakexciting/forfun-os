@@ -1,6 +1,9 @@
 OUTPUT_ARCH(riscv)
 ENTRY(_start)
 BASE_ADDRESS = 0x80200000;
+_heap_size = 0x100000;
+/* leave 512K for app kernel stack */
+_stack_start = 0x80380000;
 
 SECTIONS
 {
@@ -31,9 +34,7 @@ SECTIONS
 
     . = ALIGN(4K);
     edata = .;
-    sbss_with_stack = .;
     .bss : {
-        *(.bss.stack)
         sbss = .;
         *(.bss .bss.*)
         *(.sbss .sbss.*)
@@ -41,6 +42,25 @@ SECTIONS
 
     . = ALIGN(4K);
     ebss = .;
+
+    /* reserve 1M space for kernel heap*/
+    .heap (NOLOAD) :
+    {
+        sheap = .;
+        . += _heap_size;
+        . = ALIGN(4K);
+        eheap = .;
+    }
+
+    /* stack grow from high address to low address */
+    .stack (NOLOAD) :
+    {
+        estack = .;
+        . = ABSOLUTE(_stack_start);
+        sstack = .;
+    }
+
+    . = ALIGN(4K);
     ekernel = .;
 
     /DISCARD/ : {

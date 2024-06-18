@@ -2,8 +2,7 @@
 
 use core::borrow::BorrowMut;
 
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{collections::BTreeMap, vec::Vec};
 use super::{
     allocator::{kernel_frame_alloc, PhysFrame}, 
     basic::{PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage}
@@ -23,21 +22,11 @@ impl PageTable {
     pub fn new() -> Self {
         let frame = kernel_frame_alloc().unwrap();
         let ppn = frame.ppn.clone();
-        let mut frames: Vec<PhysFrame> = Vec::new();
-        frames.reserve(8);
+        let mut frames: Vec<PhysFrame> = Vec::with_capacity(8);
         frames.push(frame);
         Self {
             root: ppn,
             frames,
-            index: 0,
-        }
-    }
-
-    #[allow(unused)]
-    pub fn from_ppn(ppn: usize) -> Self {
-        Self {
-            root: ppn.into(),
-            frames: Vec::new(),
             index: 0,
         }
     }
@@ -176,14 +165,4 @@ impl Iterator for PageTable {
 
         None
     }
-}
-
-#[allow(unused)]
-pub fn translate(ppn: usize, va: VirtAddr) -> usize {
-    let mut pt = PageTable::from_ppn(ppn);
-    if let Some(pa) = pt.translate(va) {
-        return pa.0;
-    }
-
-    0
 }

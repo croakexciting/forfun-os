@@ -259,6 +259,7 @@ impl Process {
     pub fn fork(&mut self) -> Weak<Mutex<Self>> {
         let mut mm = MemoryManager::new();
         mm.fork(&mut self.mm);
+        let switch_ctx = SwitchContext::new_with_restore_addr_and_sp();
         let child = Arc::new(Mutex::new(
             Self {
                 tick: self.tick,
@@ -266,7 +267,7 @@ impl Process {
                 pid: pid::alloc().unwrap(),
                 parent: Some(self.pid.0),
                 children: Vec::new(),
-                ctx: self.ctx,
+                ctx: switch_ctx,
                 mm,
                 asid: asid_alloc().unwrap(),
             }
