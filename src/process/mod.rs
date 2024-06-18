@@ -10,7 +10,7 @@ use alloc::sync::Arc;
 use spin::mutex::Mutex;
 
 use crate::{
-    trap::context::TrapContext, utils::type_extern::RefCellWrap
+    mm::basic::VirtAddr, trap::context::TrapContext, utils::type_extern::RefCellWrap
 };
 
 use lazy_static::*;
@@ -32,7 +32,10 @@ pub fn run_tasks() -> ! {
 }
 
 pub fn fork() -> isize {
-    TASK_MANAGER.fork()
+    println!("fork!!!");
+    TASK_MANAGER.fork();
+    println!("back to fork");
+    0
 }
 
 pub fn exit(exit_code: isize) -> ! {
@@ -45,5 +48,11 @@ pub fn sleep(duration: usize) {
 }
 
 pub fn back_to_idle() {
+    println!("back to idle");
     TASK_MANAGER.back_to_idle();
+}
+
+pub fn remap(va: usize) -> Result<(), &'static str> {
+    println!("remap");
+    TASK_MANAGER.remap(VirtAddr::from(va).into())
 }

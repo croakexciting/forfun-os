@@ -152,6 +152,9 @@ impl MemoryManager {
     pub fn fork(&mut self, parent: &mut Self) {
         self.pt.fork(&mut parent.pt);
 
+        // 将父进程的所有 app area 复制一份，并且为 physframe 计数 +1
+        self.app_areas = parent.app_areas.clone();
+
         let ctx = parent.runtime_pull_context();
         let kernel_stack_pa = self.pt.translate_ceil(
             // 所有的 memory area 都是一个左闭右开的范围，所以 end_vpn 是不被包括在内的
@@ -170,5 +173,15 @@ impl MemoryManager {
 
     pub fn root_ppn(&self) -> PhysPage {
         self.pt.root_ppn()
+    }
+
+    pub fn remap(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
+        for m in self.app_areas.iter_mut() {
+            if m.start_vpn.0 <= vpn.0 && vpn.0 < m.end_vpn.0 {
+                return m.remap(&mut self.pt, vpn)
+            }
+        }
+
+        Err("vpn is not in this memory set")
     }
 }

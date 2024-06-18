@@ -3,6 +3,7 @@ use core::cell::RefMut;
 use core::arch::asm;
 
 use crate::mm::allocator::{asid_alloc, AisdHandler};
+use crate::mm::basic::VirtPage;
 use crate::mm::MemoryManager;
 use crate::process::switch::__switch;
 use crate::trap::context::TrapContext;
@@ -30,6 +31,7 @@ impl TaskManager {
     }
 
     pub fn inner_access(&self) -> RefMut<'_, AppManagerInner> {
+        println!("take owner");
         self.inner.exclusive_access()
     }
 
@@ -46,6 +48,7 @@ impl TaskManager {
                     let current_ctx_ptr = current.lock().ctx_ptr();
                     current.lock().set_status(RUNNING(tick - 1));
                     drop(inner);
+                    println!("give back owner");
                     unsafe {__switch(idle_ctx, current_ctx_ptr);}
                     continue;
                 }
@@ -61,12 +64,15 @@ impl TaskManager {
                     next.lock().activate();
                     // TODO: 需要考虑下这个地方，因为切换页表后，执行 __switch 似乎有点问题，但是 kernel 使用 identical 模式，似乎又是没问题的
                     drop(inner);
+                    println!("give back owner");
+
                     unsafe { __switch(idle_ctx, next_ctx_ptr); }
                 },
                 RUNNING(_) => unsafe {
                     next.lock().set_status(SLEEP(nanoseconds(), 0));
                     next.lock().activate();
                     drop(inner);
+                    println!("give back owner");
                     unsafe { __switch(idle_ctx, next_ctx_ptr); }
                 }
                 SLEEP(a, b) => unsafe {
@@ -75,6 +81,7 @@ impl TaskManager {
                         next.lock().set_status(RUNNING(tick));
                         next.lock().activate();
                         drop(inner);
+                        println!("give back owner");
                         unsafe { __switch(idle_ctx, next_ctx_ptr); }
                     } else {
                         continue;
@@ -92,6 +99,7 @@ impl TaskManager {
         let idle_ctx = inner.idle_ctx();
         let current_ctx_ptr = inner.current_task().unwrap().lock().ctx_ptr();
         drop(inner);
+        println!("give back owner");
         unsafe { __switch(current_ctx_ptr, idle_ctx); }
     }
 
@@ -125,6 +133,11 @@ impl TaskManager {
     pub fn create_initproc(&self, tick: usize, elf: &[u8]) -> isize {
         let mut inner = self.inner_access();
         inner.create_initproc(tick, elf)
+    }
+
+    pub fn remap(&self, vpn: VirtPage) -> Result<(), &'static str> {
+        let mut inner = self.inner_access();
+        inner.remap(vpn)
     }
 }
 
@@ -215,6 +228,10 @@ impl AppManagerInner {
         self.tasks.push(child);
         pid as isize
     }
+
+    pub fn remap(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
+        self.current_task().unwrap().lock().remap(vpn)
+    }
 }
 
 pub struct Process {
@@ -300,6 +317,11 @@ impl Process {
             satp::write(satp);
             asm!("sfence.vma");
         }
+    }
+
+    // 出现页错误时，重新 map
+    pub fn remap(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
+        self.mm.remap(vpn)
     }
 }
 

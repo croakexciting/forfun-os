@@ -1,8 +1,8 @@
 // 实现创建一个 app 时所需所有的内存空间的创建和映射
 // 处于简单考虑，暂且将内核空间所有段，包括堆和栈空间，直连到物理空间，后续需要优化 allocator 实现堆的动态扩容
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::sync::Arc;
 use bitflags::bitflags;
+use alloc::collections::BTreeMap;
 
 use super::{
     allocator::{frame_alloc, PhysFrame}, 
@@ -13,6 +13,7 @@ use super::{
     }, 
     pt::PageTable};
 
+#[derive(Clone)]
 pub struct MapArea {
     pub start_vpn: VirtPage,
     // end_vpn 是不包含在内的，也就是一个左闭右开的范围
@@ -21,7 +22,8 @@ pub struct MapArea {
     map_type: MapType,
     permission: Permission,
     // 放在这里只是为了在 drop 的时候自动执行 dealloc 回收这些物理页帧到 alloctor
-    frames: Vec<PhysFrame>,
+    // virtual page => physframe
+    frames: BTreeMap<usize, Arc<PhysFrame>>,
 }
 
 // 简单设计，一个 map area 中的内存页帧是一起创建，一起消失的。同时起始位置必须 4K对齐
@@ -36,7 +38,7 @@ impl MapArea {
         Self {
             start_vpn: start_va.into(),
             end_vpn: VirtAddr::from(end_va.0 - 1 + PAGE_SIZE).into(),
-            frames: vec![],
+            frames: BTreeMap::new(),
             map_type,
             permission,
         }
@@ -53,7 +55,7 @@ impl MapArea {
             MapType::Framed => {
                 let frame = frame_alloc().unwrap();
                 ppn = frame.ppn;
-                self.frames.push(frame);
+                self.frames.insert(vpn.0, Arc::new(frame));
             }
         }
         let pte_flag = PTEFlags::from_bits(self.permission.bits()).unwrap();
@@ -61,6 +63,7 @@ impl MapArea {
     }
 
     pub fn unmap_one(&mut self, pt: &mut PageTable, vpn: VirtPage) -> i32 {
+        self.frames.remove(&vpn.0);
         pt.unmap(vpn)
     }
 
@@ -104,6 +107,18 @@ impl MapArea {
 
         return 0;
     }
+
+    pub fn remap(&mut self, pt: &mut PageTable, vpn: VirtPage) -> Result<(), &'static str> {
+        if (self.unmap_one(pt, vpn)) < 0 {
+            return Err("unmap failed");
+        }
+
+        if let Some(_) = self.map_one(pt, vpn) {
+            Ok(())
+        } else {
+            return Err("remap failed");
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -115,6 +130,7 @@ pub enum MapType {
 
 bitflags! {
     /// map permission corresponding to that in pte: `R W X U`
+    #[derive(Clone)]
     pub struct Permission: u8 {
         const R = 1 << 1;
         const W = 1 << 2;

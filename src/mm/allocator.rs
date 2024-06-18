@@ -62,7 +62,7 @@ lazy_static! {
         RefCellWrap::new(PhysFrameAllocator::new(start_ppn, end_ppn))
     };
 }
-
+#[derive(Clone)]
 pub struct PhysFrame {
     pub ppn: PhysPage,
 }

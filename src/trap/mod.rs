@@ -8,7 +8,7 @@ use riscv::register::{
 };
 
 use crate::{
-    process::{back_to_idle, exit}, 
+    process::{back_to_idle, exit, remap}, 
     syscall::syscall, 
     utils::timer::set_trigger
 };
@@ -54,8 +54,18 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
         | Trap::Exception(Exception::StorePageFault)
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
-            println!("[kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.", stval, ctx.sepc);
-            exit(-1001);
+            println!("[kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}.", stval, ctx.sepc);
+            let r = remap(stval);
+            match r {
+                Ok(_) => {
+                    println!("[kernel] remap success");
+                    back_to_idle();
+                }
+                Err(e) => {
+                    println!("[kernel] remap failed: {}, kernel killed it.", e);
+                    exit(-1001);
+                }
+            }
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             println!("[kernel] IllegalInstruction in application, kernel killed it.");
