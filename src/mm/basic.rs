@@ -71,6 +71,14 @@ impl PhysAddr {
     pub fn page_number(&self) -> PhysPage {
         PhysPage(self.0 >> INPAGE_OFFSET_WIDTH)
     }
+
+    pub fn add(&self, i: usize) -> Self {
+        Self(self.0 + i)
+    }
+
+    pub fn reduce(&self, i: usize) -> Self {
+        Self(self.0 - i)
+    }
 }
 
 impl VirtAddr {
@@ -80,6 +88,10 @@ impl VirtAddr {
 
     pub fn add(&self, size: usize) -> Self {
         VirtAddr(self.0 + size)
+    }
+
+    pub fn reduce(&self, i: usize) -> Self {
+        Self(self.0 - i)
     }
 }
 
@@ -149,9 +161,15 @@ impl VirtPage {
     pub fn prev(&self) -> Self {
         Self(self.0 - 1)
     }
+
+    pub fn bytes_array(&self) -> &'static mut [u8] {
+        let addr: VirtAddr = (*self).into();
+        unsafe {core::slice::from_raw_parts_mut(addr.0 as *mut u8, 4096)}
+    }
 }
 
 bitflags! {
+    #[derive(Clone, Copy)]
     pub struct PTEFlags: u8 {
         const V = 1 << 0;
         const R = 1 << 1;
@@ -196,5 +214,20 @@ impl PageTableEntry {
 
     pub fn clear(&mut self) {
         self.0 = 0;
+    }
+
+    pub fn clear_flag(&mut self, bit: PTEFlags) {
+        if let Some(mut p) = self.flags() {
+            p.remove(bit);
+            let mask = 0xFFFFFFFFFFFFFF00 | p.bits() as usize;
+            self.0 &= mask;
+        }
+    }
+
+    pub fn set_flag(&mut self, bit: PTEFlags) {
+        if let Some(mut p) = self.flags() {
+            p.insert(bit);
+            self.0 |= p.bits() as usize;
+        }
     }
 }

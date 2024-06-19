@@ -5,9 +5,9 @@ use crate::utils::type_extern::RefCellWrap;
 use super::basic::*;
 
 // reserve for apps
-const KERNEL_ALLOCATOR_START: usize = 0x80150000;
-const ALLOCATOR_START: usize = 0x80200000;
-const ALLOCATOR_END: usize = 0x807FFFF0;
+const KERNEL_ALLOCATOR_START: usize = 0x80380000;
+const ALLOCATOR_START: usize = 0x80400000;
+const ALLOCATOR_END: usize = 0x80800000;
 
 // This struct locate at memory
 pub struct PhysFrameAllocator {
@@ -22,14 +22,17 @@ impl PhysFrameAllocator {
     }
 
     // 按照顺序
-    pub fn alloc(&mut self) -> Option<PhysPage> {
-        if let Some(ppn) = self.recycled.pop() {
-            Some(ppn.into())
-        } else if self.current == self.end {
-            None
+    pub fn alloc(&mut self) -> Option<PhysFrame> {
+        if self.current == self.end {
+            if let Some(ppn) = self.recycled.pop() {
+                Some(PhysFrame::new(ppn.into()))
+            } else {
+                None
+            }
         } else {
+            let ppn: PhysPage = (self.current).into();
             self.current += 1;
-            Some((self.current - 1).into())
+            Some(PhysFrame::new(ppn))
         }
     }
 
@@ -62,7 +65,7 @@ lazy_static! {
         RefCellWrap::new(PhysFrameAllocator::new(start_ppn, end_ppn))
     };
 }
-
+#[derive(Clone)]
 pub struct PhysFrame {
     pub ppn: PhysPage,
 }
@@ -70,8 +73,8 @@ pub struct PhysFrame {
 impl PhysFrame {
     pub fn new(ppn: PhysPage) -> Self {
         // clean physcal frame
-        let addr: PhysAddr = ppn.into();
-        unsafe { core::slice::from_raw_parts_mut(addr.0 as *mut usize, 512).fill(0) };
+        // 空间清理的工作需要交给调用者来执行
+        // unsafe { core::slice::from_raw_parts_mut(addr.0 as *mut usize, 512).fill(0) };
         Self { ppn }
     }
 }
@@ -83,11 +86,11 @@ impl Drop for PhysFrame {
 }
 
 pub fn frame_alloc() -> Option<PhysFrame> {
-    FRAME_ALLOCATOR.exclusive_access().alloc().map(|p| PhysFrame::new(p))
+    FRAME_ALLOCATOR.exclusive_access().alloc()
 }
 
 pub fn kernel_frame_alloc() -> Option<PhysFrame> {
-    KERNEL_FRAME_ALLOCATOR.exclusive_access().alloc().map(|p| PhysFrame::new(p))
+    KERNEL_FRAME_ALLOCATOR.exclusive_access().alloc()
 }
 
 pub struct AsidAllocator {
@@ -102,14 +105,14 @@ impl AsidAllocator {
     }
 
     // 按照顺序
-    pub fn alloc(&mut self) -> Option<u16> {
+    pub fn alloc(&mut self) -> Option<AisdHandler> {
         if let Some(asid) = self.recycled.pop() {
-            Some(asid)
+            Some(AisdHandler(asid))
         } else if self.current == self.end {
             None
         } else {
             self.current += 1;
-            Some(self.current - 1)
+            Some(AisdHandler(self.current - 1))
         }
     }
 
@@ -122,4 +125,16 @@ impl AsidAllocator {
 
         self.recycled.push(asid);
     }
+}
+
+pub struct AisdHandler(pub u16);
+
+impl Drop for AisdHandler {
+    fn drop(&mut self) {
+        ASID_ALLOCATOR.exclusive_access().dealloc(self.0);
+    }
+}
+
+pub fn asid_alloc() -> Option<AisdHandler> {
+    ASID_ALLOCATOR.exclusive_access().alloc()
 }

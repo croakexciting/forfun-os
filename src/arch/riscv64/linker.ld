@@ -1,9 +1,9 @@
 OUTPUT_ARCH(riscv)
 ENTRY(_start)
-BASE_ADDRESS = 0x80020000;
+BASE_ADDRESS = 0x80200000;
 _heap_size = 0x100000;
 /* leave 512K for app kernel stack */
-_stack_start = 0x8017FFF0;
+_stack_start = 0x80380000;
 
 SECTIONS
 {

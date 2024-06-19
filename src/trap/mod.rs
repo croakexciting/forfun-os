@@ -1,6 +1,5 @@
 pub mod context;
 
-use core::arch::global_asm;
 use context::TrapContext;
 use riscv::register::{
     scause::{self, Exception, Trap, Interrupt}, 
@@ -9,12 +8,10 @@ use riscv::register::{
 };
 
 use crate::{
-    process::{back_to_idle, exit}, 
+    process::{back_to_idle, cow, exit}, 
     syscall::syscall, 
     utils::timer::set_trigger
 };
-
-global_asm!(include_str!("trap.S"));
 
 pub fn init() {
     extern "C" {
@@ -54,15 +51,28 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
             back_to_idle();
         }
         Trap::Exception(Exception::StoreFault)
-        | Trap::Exception(Exception::StorePageFault)
+        | Trap::Exception(Exception::StorePageFault) => {
+            println!("[kernel] store pagefault in application, bad addr = {:#x}, bad instruction = {:#x}.", stval, ctx.sepc);
+            let r = cow(stval);
+            match r {
+                Ok(_) => {
+                    println!("[kernel] copy on write success");
+                    back_to_idle();
+                }
+                Err(e) => {
+                    println!("[kernel] copy on write failed: {}, kernel killed it.", e);
+                    exit(-1001);
+                }
+            }
+        }
+        Trap::Exception(Exception::IllegalInstruction)
+        | Trap::Exception(Exception::InstructionFault)
+        | Trap::Exception(Exception::InstructionPageFault)
+        | Trap::Exception(Exception::InstructionMisaligned)
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
-            println!("[kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.", stval, ctx.sepc);
-            exit(None);
-        }
-        Trap::Exception(Exception::IllegalInstruction) => {
             println!("[kernel] IllegalInstruction in application, kernel killed it.");
-            exit(None);
+            exit(-1002);
         }
         _ => {
             panic!(

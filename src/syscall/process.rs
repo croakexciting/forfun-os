@@ -1,7 +1,7 @@
-use crate::process::{exit, sleep};
+use crate::process::*;
 
-pub fn sys_exit(code: i32) -> ! {
-    exit(Some(code));
+pub fn sys_exit(code: isize) -> ! {
+    exit(code as isize);
 }
 
 pub fn sys_yield() {
@@ -10,4 +10,18 @@ pub fn sys_yield() {
 
 pub fn sys_nanosleep(duration: usize) {
     sleep(duration)
+}
+
+pub fn sys_fork() -> isize {
+    // clone current process and create a new process
+    // 如果不执行 exec 的话，子进程与父进程完全相同，并会继续执行下去
+    fork()
+}
+
+pub fn sys_exec(addr: usize) -> isize {
+    exec(addr)
+}
+
+pub fn sys_wait(pid: isize) -> isize {
+    wait(pid)
 }

@@ -2,7 +2,6 @@
 
 use core::borrow::BorrowMut;
 
-use alloc::vec;
 use alloc::vec::Vec;
 use super::{
     allocator::{kernel_frame_alloc, PhysFrame}, 
@@ -15,22 +14,20 @@ pub struct PageTable {
     root: PhysPage,
     // 存储页表的物理页帧，放在这里只是为了页表实例回收的时候自动将 Frame dealloc
     frames: Vec<PhysFrame>,
+
+    index: usize,
 }
 
 impl PageTable {
     pub fn new() -> Self {
         let frame = kernel_frame_alloc().unwrap();
+        let ppn = frame.ppn.clone();
+        let mut frames: Vec<PhysFrame> = Vec::with_capacity(8);
+        frames.push(frame);
         Self {
-            root: frame.ppn,
-            frames: vec![frame],
-        }
-    }
-
-    #[allow(unused)]
-    pub fn from_ppn(ppn: usize) -> Self {
-        Self {
-            root: ppn.into(),
-            frames: Vec::new(),
+            root: ppn,
+            frames,
+            index: 0,
         }
     }
 
@@ -61,6 +58,15 @@ impl PageTable {
         None
     }
 
+    pub fn find_valid_pte(&mut self, vpn: VirtPage) -> Option<PageTableEntry> {
+        let pte = self.find_pte(vpn).unwrap();
+        if pte.is_valid() {
+            return Some(pte.clone());
+        }
+
+        None
+    }
+
     // 事实上你可以将虚拟地址看成是 index，用于寻找到对应的 PTE，然后根据物理页帧信息修改 PTE
     pub fn map(&mut self, vpn: VirtPage, ppn: PhysPage, flags: PTEFlags) -> Option<PageTableEntry> {
         let pte = self.find_pte(vpn).unwrap();
@@ -83,6 +89,21 @@ impl PageTable {
         pte.clear();
         return 0;
     }
+    
+    pub fn remap(&mut self, vpn: VirtPage, ppn: PhysPage, flags: PTEFlags) -> Option<PageTableEntry> {
+        if self.unmap(vpn) < 0 {
+            return None
+        }
+
+        self.map(vpn, ppn, flags)
+    }
+
+    pub fn set_pte(&mut self, new_pte: PageTableEntry, vpn: VirtPage) -> Option<PageTableEntry> {
+        let pte = self.find_pte(vpn)?;
+        let old_pte = pte.clone();
+        *pte = new_pte;
+        Some(old_pte)
+    }
 
     pub fn root_ppn(&self) -> PhysPage {
         self.root
@@ -92,19 +113,54 @@ impl PageTable {
     pub fn translate(&mut self, va: VirtAddr) -> Option<PhysAddr> {
         let vp = VirtPage::from(va);
         if let Some(pte) = self.find_pte(vp) {
-            let pa = pte.ppn().0 << 12 | (va.0 & (1<<12 - 1));
+            let pa = pte.ppn().0 << 12 | (va.0 & ((1<<12) - 1));
             return  Some(pa.into());
         }
         None
     }
-}
-
-#[allow(unused)]
-pub fn translate(ppn: usize, va: VirtAddr) -> usize {
-    let mut pt = PageTable::from_ppn(ppn);
-    if let Some(pa) = pt.translate(va) {
-        return pa.0;
+   
+    // find ceil 用于找到内存范围集合上限对应的物理地址
+    // 其实这个地址是用不上的，比如 0x8000 是上限，但是只有 0x7FFF 是实际使用到的地址
+    // 如果此时 0x7FFF 对应的 0x107FFF，那么 0x8000 就需要对应 0x108000，即使 0x8000 这个虚拟地址是没有被分配的
+    pub fn translate_ceil(&mut self, ceil_va: VirtAddr) -> Option<PhysAddr> {
+        let pa = self.translate(ceil_va.reduce(1))?;
+        Some(pa.add(1))
     }
 
-    0
+    pub fn kmap(&mut self, pa: PhysAddr) -> Option<PageTableEntry> {
+        let va = VirtAddr::from(pa.0);
+        self.map(va.into(), pa.into(), PTEFlags::V | PTEFlags::W | PTEFlags::R)
+    }
+
+    pub fn kunmap(&mut self, pa: PhysAddr) -> i32 {
+        let va = VirtAddr::from(pa.0);
+        self.unmap(va.into())
+    }
+}
+
+impl Iterator for PageTable {
+    type Item = (usize, &'static mut PageTableEntry);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.index < (1 << 27) {
+            let idx = VirtPage::from(self.index).index();
+            let mut ppn = self.root;
+            for (k, v) in idx.iter().enumerate() {
+                let pte = ppn.pte_array()[*v].borrow_mut();
+                if pte.is_valid() {
+                    if k == 2 {
+                        return Some((self.index, pte));
+                    } else {
+                        ppn = pte.ppn();
+                        continue;
+                    }
+                } else {
+                    self.index += 512 ^ (2-k);
+                    continue;
+                }
+            }
+        }
+
+        None
+    }
 }

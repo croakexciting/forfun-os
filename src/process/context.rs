@@ -1,3 +1,5 @@
+use crate::trap::context::TrapContext;
+
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct SwitchContext {
@@ -31,5 +33,15 @@ impl SwitchContext {
         }
 
         Self::new(__restore as usize, sp)
+    }
+
+    pub fn new_with_restore_addr_and_sp() -> Self {
+        extern "C" {
+            fn __restore();
+        }
+
+        let s: usize = 0x9000_0000 - core::mem::size_of::<TrapContext>();
+
+        Self::new(__restore as usize, s)
     }
 }

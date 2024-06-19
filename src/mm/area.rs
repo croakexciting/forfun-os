@@ -1,8 +1,13 @@
 // 实现创建一个 app 时所需所有的内存空间的创建和映射
 // 处于简单考虑，暂且将内核空间所有段，包括堆和栈空间，直连到物理空间，后续需要优化 allocator 实现堆的动态扩容
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::sync::Arc;
 use bitflags::bitflags;
+use alloc::collections::BTreeMap;
+
+use crate::arch::riscv64::{
+    copy_user_page_to_vector, 
+    copy_vector_to_user_page
+};
 
 use super::{
     allocator::{frame_alloc, PhysFrame}, 
@@ -13,6 +18,7 @@ use super::{
     }, 
     pt::PageTable};
 
+#[derive(Clone)]
 pub struct MapArea {
     pub start_vpn: VirtPage,
     // end_vpn 是不包含在内的，也就是一个左闭右开的范围
@@ -21,7 +27,8 @@ pub struct MapArea {
     map_type: MapType,
     permission: Permission,
     // 放在这里只是为了在 drop 的时候自动执行 dealloc 回收这些物理页帧到 alloctor
-    frames: Vec<PhysFrame>,
+    // virtual page => physframe
+    frames: BTreeMap<usize, Arc<PhysFrame>>,
 }
 
 // 简单设计，一个 map area 中的内存页帧是一起创建，一起消失的。同时起始位置必须 4K对齐
@@ -36,7 +43,7 @@ impl MapArea {
         Self {
             start_vpn: start_va.into(),
             end_vpn: VirtAddr::from(end_va.0 - 1 + PAGE_SIZE).into(),
-            frames: vec![],
+            frames: BTreeMap::new(),
             map_type,
             permission,
         }
@@ -51,16 +58,17 @@ impl MapArea {
                 ppn = PhysPage(vpn.0);
             }
             MapType::Framed => {
-                let frame = frame_alloc().unwrap();
+                let frame = frame_alloc()?;
                 ppn = frame.ppn;
-                self.frames.push(frame);
+                self.frames.insert(vpn.0, Arc::new(frame));
             }
         }
-        let pte_flag = PTEFlags::from_bits(self.permission.bits()).unwrap();
+        let pte_flag = PTEFlags::from_bits(self.permission.bits())?;
         pt.map(vpn, ppn, pte_flag)
     }
 
     pub fn unmap_one(&mut self, pt: &mut PageTable, vpn: VirtPage) -> i32 {
+        self.frames.remove(&vpn.0);
         pt.unmap(vpn)
     }
 
@@ -96,6 +104,43 @@ impl MapArea {
         Ok(())
     }
 
+    // 在运行时加载 elf 到当前地址空间
+    pub fn runtime_map_with_data(&mut self, pt: &mut PageTable, data: &[u8]) -> Result<(), &'static str>{
+        if data.len() > (self.end_vpn.0 - self.start_vpn.0) * PAGE_SIZE {
+            return Err("data length overflow");
+        }
+
+        let mut offset: usize = 0;
+        for v in self.start_vpn.0..self.end_vpn.0 {
+            // map
+            let pte = self.map_one(pt, v.into());
+
+            // copy data page by page
+            if let Some(mut p) = pte {
+                unsafe { riscv::register::sstatus::set_sum(); }
+                let src = &data[offset..data.len().min(offset + PAGE_SIZE)];
+                let dst = &mut VirtPage::from(v).bytes_array()[..src.len()];
+                // 如果没有写入权限。临时修改
+                if !p.is_set(PTEFlags::W) {
+                    p.set_flag(PTEFlags::W);
+                    let old_pte = pt.set_pte(p, v.into()).unwrap();
+                    dst.copy_from_slice(src);
+                    offset += PAGE_SIZE;
+                    pt.set_pte(old_pte, v.into());
+                } else {
+                    dst.copy_from_slice(src);
+                    offset += PAGE_SIZE;
+                }
+                unsafe { riscv::register::sstatus::clear_sum(); }
+            } else {
+                return Err("pte map failed");
+            }
+        }
+
+        Ok(())
+    }
+
+
     #[allow(unused)]
     pub fn unmap(&mut self, pt: &mut PageTable) -> i32 {
         for v in self.start_vpn.0..self.end_vpn.0 {
@@ -103,6 +148,42 @@ impl MapArea {
         }
 
         return 0;
+    }
+
+    pub fn fork(&self, pt: &mut PageTable, child_pt: &mut PageTable) -> Self {
+        let mut child_frames: BTreeMap<usize, Arc<PhysFrame>> = BTreeMap::new();
+
+        for (k, v) in self.frames.iter() {
+            let pte = pt.find_valid_pte((*k).into()).unwrap();
+            let mut flags = pte.flags().unwrap();
+            flags.remove(PTEFlags::W);
+
+            child_pt.map((*k).into(), v.ppn, flags).unwrap();
+            pt.remap((*k).into(), v.ppn, flags).unwrap();
+            child_frames.insert(*k, v.clone());
+        }
+        
+        Self {
+            start_vpn: self.start_vpn,
+            end_vpn: self.end_vpn,
+            map_type: self.map_type,
+            permission: self.permission,
+            frames: child_frames,
+        } 
+    }
+
+    pub fn cow(&mut self, pt: &mut PageTable, vpn: VirtPage) -> Result<(), &'static str> {
+        let data = copy_user_page_to_vector(vpn);
+        if (self.unmap_one(pt, vpn)) < 0 {
+            return Err("unmap failed");
+        }
+
+        if let Some(_) = self.map_one(pt, vpn) {
+            copy_vector_to_user_page(data, vpn);
+            Ok(())
+        } else {
+            return Err("remap failed");
+        }
     }
 }
 
@@ -115,6 +196,7 @@ pub enum MapType {
 
 bitflags! {
     /// map permission corresponding to that in pte: `R W X U`
+    #[derive(Copy, Clone)]
     pub struct Permission: u8 {
         const R = 1 << 1;
         const W = 1 << 2;
