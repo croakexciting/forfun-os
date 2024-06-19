@@ -7,7 +7,7 @@ edition = "2021"
 sbi-rt = { version = "0.0.3", features = ["legacy"] }
 log = "0.4"
 riscv = "0.10.1"
-buddy_system_allocator = "0.6"
+linked_list_allocator = "0.10.5"
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 bitflags = "2.5.0"
 xmas-elf = "0.9.1"

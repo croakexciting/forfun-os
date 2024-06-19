@@ -125,6 +125,11 @@ impl TaskManager {
         inner.fork()
     }
 
+    pub fn exec(&self, elf: usize) -> isize {
+        let mut inner = self.inner_access();
+        inner.exec(elf)
+    }
+
     pub fn create_initproc(&self, tick: usize, elf: &[u8]) -> isize {
         let mut inner = self.inner_access();
         inner.create_initproc(tick, elf)
@@ -224,6 +229,16 @@ impl AppManagerInner {
         pid as isize
     }
 
+    pub fn exec(&mut self, elf: usize) -> isize {
+        match self.current_task().unwrap().lock().exec(elf) {
+            Ok(_) => {return 0;}
+            Err(e) => {
+                println!("[kernel] exec failed {}", e);
+                return  -1;
+            }
+        }
+    }
+
     pub fn remap(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
         self.current_task().unwrap().lock().remap(vpn)
     }
@@ -278,6 +293,21 @@ impl Process {
         weak
     }
 
+    pub fn exec(&mut self, data_addr: usize) -> Result<(), &'static str> {
+        let elf = unsafe {
+            core::slice::from_raw_parts(data_addr as *mut u8, 4096 * 16)
+        };
+
+        // unmap all app area, for load elf again
+        self.mm.unmap_app();
+        let (sp, pc) = self.mm.runtime_load_elf(elf)?;
+        let trap_ctx = TrapContext::new(pc, sp);
+        let kernel_sp = self.mm.runtime_push_context(trap_ctx);
+        self.ctx = SwitchContext::new_with_restore_addr(kernel_sp);
+        self.set_status(ProcessStatus::READY);
+        Ok(())
+    }
+
     pub fn set_status(&mut self, status: ProcessStatus) {
         self.status = status;
     }
@@ -294,6 +324,22 @@ impl Process {
         // 解析 elf 文件到 mm 中
         // 请注意，这里的 sp 是用户栈 sp，而不是 app 对应的内核栈的 app
         let (sp, pc) = self.mm.load_elf(data)?;
+
+        // 根据获取的 app pc 和 sp 创建 TrapContext
+        let trap_ctx = TrapContext::new(pc, sp);
+
+        // 将 TrapContext push 到 kernel stack 中，并且更新 switch context
+        let kernel_sp = self.mm.push_context(trap_ctx);
+        self.ctx = SwitchContext::new_with_restore_addr(kernel_sp);
+
+        self.set_status(ProcessStatus::READY);
+        Ok(())
+    }
+
+    pub fn runtime_load_elf(&mut self, data: &[u8]) -> Result<(), &'static str> {
+        // 解析 elf 文件到 mm 中
+        // 请注意，这里的 sp 是用户栈 sp，而不是 app 对应的内核栈的 app
+        let (sp, pc) = self.mm.runtime_load_elf(data)?;
 
         // 根据获取的 app pc 和 sp 创建 TrapContext
         let trap_ctx = TrapContext::new(pc, sp);

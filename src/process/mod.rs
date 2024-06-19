@@ -35,6 +35,10 @@ pub fn fork() -> isize {
     TASK_MANAGER.fork()
 }
 
+pub fn exec(elf: usize) -> isize {
+    TASK_MANAGER.exec(elf)
+}
+
 pub fn exit(exit_code: isize) -> ! {
     TASK_MANAGER.exit(exit_code)
 }

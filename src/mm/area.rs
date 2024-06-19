@@ -99,6 +99,43 @@ impl MapArea {
         Ok(())
     }
 
+    // 在运行时加载 elf 到当前地址空间
+    pub fn runtime_map_with_data(&mut self, pt: &mut PageTable, data: &[u8]) -> Result<(), &'static str>{
+        if data.len() > (self.end_vpn.0 - self.start_vpn.0) * PAGE_SIZE {
+            return Err("data length overflow");
+        }
+
+        let mut offset: usize = 0;
+        for v in self.start_vpn.0..self.end_vpn.0 {
+            // map
+            let pte = self.map_one(pt, v.into());
+
+            // copy data page by page
+            if let Some(mut p) = pte {
+                unsafe { riscv::register::sstatus::set_sum(); }
+                let src = &data[offset..data.len().min(offset + PAGE_SIZE)];
+                let dst = &mut VirtPage::from(v).bytes_array()[..src.len()];
+                // 如果没有写入权限。临时修改
+                if !p.is_set(PTEFlags::W) {
+                    p.set_flag(PTEFlags::W);
+                    let old_pte = pt.set_pte(p, v.into()).unwrap();
+                    dst.copy_from_slice(src);
+                    offset += PAGE_SIZE;
+                    pt.set_pte(old_pte, v.into());
+                } else {
+                    dst.copy_from_slice(src);
+                    offset += PAGE_SIZE;
+                }
+                unsafe { riscv::register::sstatus::clear_sum(); }
+            } else {
+                return Err("pte map failed");
+            }
+        }
+
+        Ok(())
+    }
+
+
     #[allow(unused)]
     pub fn unmap(&mut self, pt: &mut PageTable) -> i32 {
         for v in self.start_vpn.0..self.end_vpn.0 {

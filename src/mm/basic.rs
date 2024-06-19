@@ -1,4 +1,4 @@
-use bitflags::bitflags;
+use bitflags::{bitflags, Flags};
 
 const PA_VALID_WIDTH: usize = 56;
 const VA_VALID_WIDTH: usize = 39;
@@ -161,6 +161,11 @@ impl VirtPage {
     pub fn prev(&self) -> Self {
         Self(self.0 - 1)
     }
+
+    pub fn bytes_array(&self) -> &'static mut [u8] {
+        let addr: VirtAddr = (*self).into();
+        unsafe {core::slice::from_raw_parts_mut(addr.0 as *mut u8, 4096)}
+    }
 }
 
 bitflags! {
@@ -213,7 +218,16 @@ impl PageTableEntry {
 
     pub fn clear_flag(&mut self, bit: PTEFlags) {
         if let Some(mut p) = self.flags() {
-            p.remove(bit)
+            p.remove(bit);
+            let mask = 0xFFFFFFFFFFFFFF00 | p.bits() as usize;
+            self.0 &= mask;
+        }
+    }
+
+    pub fn set_flag(&mut self, bit: PTEFlags) {
+        if let Some(mut p) = self.flags() {
+            p.insert(bit);
+            self.0 |= p.bits() as usize;
         }
     }
 }

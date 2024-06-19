@@ -2,7 +2,9 @@
 
 use core::borrow::BorrowMut;
 
-use alloc::{collections::BTreeMap, vec::Vec};
+use alloc::vec::Vec;
+use alloc::sync::Arc;
+use spin::mutex::Mutex;
 use super::{
     allocator::{kernel_frame_alloc, PhysFrame}, 
     basic::{PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage}
@@ -98,6 +100,12 @@ impl PageTable {
         self.map(vpn, ppn, flags)
     }
 
+    pub fn set_pte(&mut self, new_pte: PageTableEntry, vpn: VirtPage) -> Option<PageTableEntry> {
+        let pte = self.find_pte(vpn)?;
+        let old_pte = pte.clone();
+        *pte = new_pte;
+        Some(old_pte)
+    }
 
     pub fn root_ppn(&self) -> PhysPage {
         self.root
@@ -120,14 +128,6 @@ impl PageTable {
         let pa = self.translate(ceil_va.reduce(1))?;
         Some(pa.add(1))
     }
-
-    // pub fn fork(&mut self, parent: &mut Self) {
-    //     self.index = 0;
-    //     for (k, v) in parent {
-    //         v.clear_flag(PTEFlags::W);
-    //         self.map(k.into(), v.ppn(), v.flags().unwrap());
-    //     }
-    // }
 
     pub fn kmap(&mut self, pa: PhysAddr) -> Option<PageTableEntry> {
         let va = VirtAddr::from(pa.0);

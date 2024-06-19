@@ -21,8 +21,8 @@ mod board;
 
 use core::arch::global_asm;
 extern crate alloc;
-use process::{app::Process, create_proc, run_tasks};
-use buddy_system_allocator::LockedHeap;
+use process::{create_proc, run_tasks};
+use linked_list_allocator::LockedHeap;
 use utils::timer;
 
 global_asm!(include_str!("arch/riscv64/entry.asm"));
@@ -55,10 +55,12 @@ pub fn init_heap() {
         fn sheap();
         fn eheap();
     }
+
+    println!("heap start at {:#x}, end at {:#x}", sheap as usize, eheap as usize);
     unsafe {
         HEAP_ALLOCATOR
             .lock()
-            .init(sheap as usize, eheap as usize - sheap as usize);
+            .init(sheap as usize as *mut u8, eheap as usize - sheap as usize);
     }
 }
 

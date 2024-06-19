@@ -17,3 +17,7 @@ pub fn sys_fork() -> isize {
     // 如果不执行 exec 的话，子进程与父进程完全相同，并会继续执行下去
     fork()
 }
+
+pub fn sys_exec(addr: usize) -> isize {
+    exec(addr)
+}
