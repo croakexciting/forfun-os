@@ -1,4 +1,4 @@
-use bitflags::{bitflags, Flags};
+use bitflags::bitflags;
 
 const PA_VALID_WIDTH: usize = 56;
 const VA_VALID_WIDTH: usize = 39;

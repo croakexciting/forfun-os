@@ -11,6 +11,7 @@ use crate::utils::timer::nanoseconds;
 use crate::utils::type_extern::RefCellWrap;
 
 use alloc::sync::{Arc, Weak};
+use alloc::collections::BTreeMap;
 use spin::mutex::Mutex;
 use alloc::{format, vec};
 use alloc::vec::Vec;
@@ -139,6 +140,11 @@ impl TaskManager {
         let mut inner = self.inner_access();
         inner.remap(vpn)
     }
+
+    pub fn wait(&self, pid: usize) -> isize {
+        let mut inner = self.inner_access();
+        inner.wait(pid)
+    }
 }
 
 pub struct AppManagerInner {
@@ -158,7 +164,7 @@ impl AppManagerInner {
             started: false,
             current: 0,
             initproc: None,
-            tasks: vec![],
+            tasks: Vec::new(),
             // idle process is a unstop loop process
             idle_ctx: SwitchContext::new(0, 0),
         }
@@ -242,6 +248,10 @@ impl AppManagerInner {
     pub fn remap(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
         self.current_task().unwrap().lock().remap(vpn)
     }
+
+    pub fn wait(&mut self, pid: usize) -> isize {
+        self.current_task().unwrap().lock().wait(pid)
+    }
 }
 
 pub struct Process {
@@ -249,7 +259,7 @@ pub struct Process {
     pub status: ProcessStatus,
     pub pid: PidHandler,
     pub parent: Option<usize>,
-    pub children: Vec<Arc<Mutex<Self>>>,
+    pub children: BTreeMap<usize, Arc<Mutex<Self>>>,
     
     ctx: SwitchContext,
     mm: MemoryManager,
@@ -264,7 +274,7 @@ impl Process {
             status: ProcessStatus::UNINIT,
             pid: pid::alloc().unwrap(),
             parent: None,
-            children: Vec::new(),
+            children: BTreeMap::new(),
             ctx: SwitchContext::bare(),
             mm: MemoryManager::new(),
             asid: asid_alloc().unwrap(),
@@ -275,13 +285,14 @@ impl Process {
         let mut mm = MemoryManager::new();
         mm.fork(&mut self.mm);
         let switch_ctx = SwitchContext::new_with_restore_addr_and_sp();
+        let pid = pid::alloc().unwrap();
         let child = Arc::new(Mutex::new(
             Self {
                 tick: self.tick,
                 status: ProcessStatus::READY,
-                pid: pid::alloc().unwrap(),
+                pid: pid.clone(),
                 parent: Some(self.pid.0),
-                children: Vec::new(),
+                children: BTreeMap::new(),
                 ctx: switch_ctx,
                 mm,
                 asid: asid_alloc().unwrap(),
@@ -289,7 +300,7 @@ impl Process {
         ));
 
         let weak = Arc::downgrade(&child);
-        self.children.push(child);
+        self.children.insert(pid.0, child);
         weak
     }
 
@@ -306,6 +317,28 @@ impl Process {
         self.ctx = SwitchContext::new_with_restore_addr(kernel_sp);
         self.set_status(ProcessStatus::READY);
         Ok(())
+    }
+
+    // 等待子进程结束，如果结束，回收子进程资源
+    // TODO: 在 task manager 中已经释放的进程去掉
+    pub fn wait(&mut self, pid: usize) -> isize {
+        for (k, v) in self.children.clone().iter() {
+            if pid == v.lock().pid.0 {
+                match v.lock().status {
+                    ProcessStatus::EXITED(_) => {
+                        self.children.remove(k);
+                        return 0;
+                    }
+                    _ => {
+                        // 还没结束
+                        return -2;
+                    }
+                }
+            }
+        }
+
+        // 没找到
+        -1
     }
 
     pub fn set_status(&mut self, status: ProcessStatus) {

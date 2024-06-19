@@ -3,8 +3,6 @@
 use core::borrow::BorrowMut;
 
 use alloc::vec::Vec;
-use alloc::sync::Arc;
-use spin::mutex::Mutex;
 use super::{
     allocator::{kernel_frame_alloc, PhysFrame}, 
     basic::{PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage}

@@ -21,3 +21,7 @@ pub fn sys_fork() -> isize {
 pub fn sys_exec(addr: usize) -> isize {
     exec(addr)
 }
+
+pub fn sys_wait(pid: usize) -> isize {
+    wait(pid)
+}
