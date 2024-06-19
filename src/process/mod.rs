@@ -52,10 +52,10 @@ pub fn back_to_idle() {
     TASK_MANAGER.back_to_idle();
 }
 
-pub fn remap(va: usize) -> Result<(), &'static str> {
-    TASK_MANAGER.remap(VirtAddr::from(va).into())
+pub fn cow(va: usize) -> Result<(), &'static str> {
+    TASK_MANAGER.cow(VirtAddr::from(va).into())
 }
 
-pub fn wait(pid: usize) -> isize {
+pub fn wait(pid: isize) -> isize {
     TASK_MANAGER.wait(pid)
 }

@@ -21,7 +21,7 @@ pub fn syscall(id: usize, args: [usize; 3]) -> isize {
         SYSCALL_NANOSLEEP => {sys_nanosleep(args[0] as usize); 0},
         SYSCALL_FORK => {sys_fork()},
         SYSCALL_EXEC => {sys_exec(args[0] as usize)},
-        SYSCALL_WAIT => {sys_wait(args[0] as usize)},
+        SYSCALL_WAIT => {sys_wait(args[0] as isize)},
         _ => panic!("Unsupported syscall id: {}", id),
     }
 }

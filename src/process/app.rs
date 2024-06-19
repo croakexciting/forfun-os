@@ -47,6 +47,7 @@ impl TaskManager {
                 if tick - 1 > 0 {
                     let current_ctx_ptr = current.lock().ctx_ptr();
                     current.lock().set_status(RUNNING(tick - 1));
+                    drop(current);
                     drop(inner);
                     unsafe {__switch(idle_ctx, current_ctx_ptr);}
                     continue;
@@ -62,6 +63,7 @@ impl TaskManager {
                     next.lock().set_status(RUNNING(tick));
                     next.lock().activate();
                     // TODO: 需要考虑下这个地方，因为切换页表后，执行 __switch 似乎有点问题，但是 kernel 使用 identical 模式，似乎又是没问题的
+                    drop(next);
                     drop(inner);
 
                     unsafe { __switch(idle_ctx, next_ctx_ptr); }
@@ -69,6 +71,7 @@ impl TaskManager {
                 RUNNING(_) => unsafe {
                     next.lock().set_status(SLEEP(nanoseconds(), 0));
                     next.lock().activate();
+                    drop(next);
                     drop(inner);
                     unsafe { __switch(idle_ctx, next_ctx_ptr); }
                 }
@@ -77,6 +80,7 @@ impl TaskManager {
                         let tick = next.lock().tick;
                         next.lock().set_status(RUNNING(tick));
                         next.lock().activate();
+                        drop(next);
                         drop(inner);
                         unsafe { __switch(idle_ctx, next_ctx_ptr); }
                     } else {
@@ -102,6 +106,7 @@ impl TaskManager {
         let mut inner = self.inner_access();
         let current = inner.current_task().unwrap();
         current.lock().set_status(ProcessStatus::SLEEP(nanoseconds(), duration));
+        drop(current);
         drop(inner);
 
         self.back_to_idle();
@@ -114,6 +119,7 @@ impl TaskManager {
         let current_ctx_ptr = current.lock().ctx_ptr();
         current.lock().set_status(ProcessStatus::EXITED(exit_code));
         let pid = current.lock().pid.clone();
+        drop(current);
         drop(inner);
         unsafe {
             __switch(current_ctx_ptr, idle_ctx);
@@ -136,12 +142,12 @@ impl TaskManager {
         inner.create_initproc(tick, elf)
     }
 
-    pub fn remap(&self, vpn: VirtPage) -> Result<(), &'static str> {
+    pub fn cow(&self, vpn: VirtPage) -> Result<(), &'static str> {
         let mut inner = self.inner_access();
-        inner.remap(vpn)
+        inner.cow(vpn)
     }
 
-    pub fn wait(&self, pid: usize) -> isize {
+    pub fn wait(&self, pid: isize) -> isize {
         let mut inner = self.inner_access();
         inner.wait(pid)
     }
@@ -175,6 +181,7 @@ impl AppManagerInner {
         if let Some(task) = self.tasks[id].upgrade() {
             Ok(task)
         } else {
+            self.tasks.remove(id);
             Err("task instance not exists now.")
         }
     }
@@ -211,20 +218,35 @@ impl AppManagerInner {
         }
     } 
 
-    fn current_task(&mut self) -> Result<Arc<Mutex<Process>>, &'static str> {
-        self.task(self.current)
+    fn current_task(&mut self) -> Option<Arc<Mutex<Process>>> {
+        match self.task(self.current) {
+            Ok(p) => {
+                Some(p)
+            }
+            Err(_) => {
+                self.next_task()
+            } 
+        }
     }
 
-    fn next_task(&mut self) -> Result<Arc<Mutex<Process>>, &'static str> {
+    fn next_task(&mut self) -> Option<Arc<Mutex<Process>>> {
         assert!(self.tasks.len() > 0, "The app vector is empty!!!");
         if self.started {
             // When the next api be called, there must be at least one apps in vector
             let next = (self.current + 1) % self.tasks.len();
             self.current = next;
-            self.task(next)
+            match self.task(self.current) {
+                Ok(p) => {
+                    Some(p)
+                }
+                Err(_) => {
+                    self.next_task()
+                } 
+            }
         } else {
             self.started = true;
-            self.task(0)
+            // 无论如何，至少有一个初始进程，pid 为 0 的进程必须存在
+            Some(self.task(0).unwrap())
         }
     }
 
@@ -245,11 +267,11 @@ impl AppManagerInner {
         }
     }
 
-    pub fn remap(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
-        self.current_task().unwrap().lock().remap(vpn)
+    pub fn cow(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
+        self.current_task().unwrap().lock().cow(vpn)
     }
 
-    pub fn wait(&mut self, pid: usize) -> isize {
+    pub fn wait(&mut self, pid: isize) -> isize {
         self.current_task().unwrap().lock().wait(pid)
     }
 }
@@ -286,11 +308,12 @@ impl Process {
         mm.fork(&mut self.mm);
         let switch_ctx = SwitchContext::new_with_restore_addr_and_sp();
         let pid = pid::alloc().unwrap();
+        let key = pid.0;
         let child = Arc::new(Mutex::new(
             Self {
                 tick: self.tick,
                 status: ProcessStatus::READY,
-                pid: pid.clone(),
+                pid,
                 parent: Some(self.pid.0),
                 children: BTreeMap::new(),
                 ctx: switch_ctx,
@@ -300,7 +323,7 @@ impl Process {
         ));
 
         let weak = Arc::downgrade(&child);
-        self.children.insert(pid.0, child);
+        self.children.insert(key, child);
         weak
     }
 
@@ -321,24 +344,26 @@ impl Process {
 
     // 等待子进程结束，如果结束，回收子进程资源
     // TODO: 在 task manager 中已经释放的进程去掉
-    pub fn wait(&mut self, pid: usize) -> isize {
-        for (k, v) in self.children.clone().iter() {
-            if pid == v.lock().pid.0 {
+    pub fn wait(&mut self, pid: isize) -> isize {
+        let mut result = -1;
+
+        for (k, v) in self.children.clone().iter().map(|child| child) {
+            if pid == -1 || (pid as usize) == v.lock().pid.0 {
                 match v.lock().status {
                     ProcessStatus::EXITED(_) => {
                         self.children.remove(k);
-                        return 0;
+                        result = 0;
                     }
                     _ => {
                         // 还没结束
-                        return -2;
+                        result = -2;
+                        break;
                     }
                 }
             }
         }
 
-        // 没找到
-        -1
+        result
     }
 
     pub fn set_status(&mut self, status: ProcessStatus) {
@@ -394,9 +419,9 @@ impl Process {
         }
     }
 
-    // 出现页错误时，重新 map
-    pub fn remap(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
-        self.mm.remap(vpn)
+    // 出现页错误时，copy on write
+    pub fn cow(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
+        self.mm.cow(vpn)
     }
 }
 

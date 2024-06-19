@@ -4,6 +4,11 @@ use alloc::sync::Arc;
 use bitflags::bitflags;
 use alloc::collections::BTreeMap;
 
+use crate::arch::riscv64::{
+    copy_user_page_to_vector, 
+    copy_vector_to_user_page
+};
+
 use super::{
     allocator::{frame_alloc, PhysFrame}, 
     basic::{
@@ -167,12 +172,14 @@ impl MapArea {
         } 
     }
 
-    pub fn remap(&mut self, pt: &mut PageTable, vpn: VirtPage) -> Result<(), &'static str> {
+    pub fn cow(&mut self, pt: &mut PageTable, vpn: VirtPage) -> Result<(), &'static str> {
+        let data = copy_user_page_to_vector(vpn);
         if (self.unmap_one(pt, vpn)) < 0 {
             return Err("unmap failed");
         }
 
         if let Some(_) = self.map_one(pt, vpn) {
+            copy_vector_to_user_page(data, vpn);
             Ok(())
         } else {
             return Err("remap failed");

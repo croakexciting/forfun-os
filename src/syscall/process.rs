@@ -22,6 +22,6 @@ pub fn sys_exec(addr: usize) -> isize {
     exec(addr)
 }
 
-pub fn sys_wait(pid: usize) -> isize {
+pub fn sys_wait(pid: isize) -> isize {
     wait(pid)
 }

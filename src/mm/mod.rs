@@ -247,10 +247,10 @@ impl MemoryManager {
         self.pt.root_ppn()
     }
 
-    pub fn remap(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
+    pub fn cow(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
         for m in self.app_areas.iter_mut() {
             if m.start_vpn.0 <= vpn.0 && vpn.0 < m.end_vpn.0 {
-                return m.remap(&mut self.pt, vpn)
+                return m.cow(&mut self.pt, vpn)
             }
         }
 
