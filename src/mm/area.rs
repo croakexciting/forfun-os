@@ -215,11 +215,14 @@ pub struct UserBuffer {
 impl UserBuffer {
     #[allow(unused)]
     pub fn new(b: &'static mut [u8]) -> Self {
+        // 简单起见，声明一个 userbuffer 时，会自动将 sum flag 置 1
+        unsafe { riscv::register::sstatus::set_sum() };
         Self { buffer: b }
     }
 
     pub fn new_from_raw(addr: *mut u8, len: usize) -> Self {
         unsafe {
+            riscv::register::sstatus::set_sum();
             let buffer = core::slice::from_raw_parts_mut(addr, len);
             Self { buffer }
         }
@@ -227,5 +230,11 @@ impl UserBuffer {
 
     pub fn copy_to_vector(&self) -> Vec<u8> {
         copy_from_user_into_vector(self.buffer.as_ptr(), self.buffer.len())
+    }
+}
+
+impl Drop for UserBuffer {
+    fn drop(&mut self) {
+        unsafe { riscv::register::sstatus::clear_sum() };
     }
 }

@@ -2,6 +2,7 @@ use core::borrow::BorrowMut;
 use core::cell::RefMut;
 use core::arch::asm;
 
+use crate::file::pipe::Pipe;
 use crate::file::stdio::Stdout;
 use crate::file::File;
 use crate::mm::allocator::{asid_alloc, AisdHandler};
@@ -44,7 +45,7 @@ impl TaskManager {
             let mut inner = self.inner_access();
             let idle_ctx = inner.idle_ctx();
             // 暂时简化处理，如果获取不到当前任务，会直接 panic
-            let current = inner.current_task().unwrap();
+            let current = inner.current_task(false).unwrap();
             let current_status = current.lock().status;
             if let RUNNING(tick) = current_status {
                 if tick - 1 > 0 {
@@ -100,14 +101,14 @@ impl TaskManager {
     pub fn back_to_idle(&self) {
         let mut inner = self.inner_access();
         let idle_ctx = inner.idle_ctx();
-        let current_ctx_ptr = inner.current_task().unwrap().lock().ctx_ptr();
+        let current_ctx_ptr = inner.current_task(false).unwrap().lock().ctx_ptr();
         drop(inner);
         unsafe { __switch(current_ctx_ptr, idle_ctx); }
     }
 
     pub fn sleep(&self, duration: usize) {
         let mut inner = self.inner_access();
-        let current = inner.current_task().unwrap();
+        let current = inner.current_task(false).unwrap();
         current.lock().set_status(ProcessStatus::SLEEP(nanoseconds(), duration));
         drop(current);
         drop(inner);
@@ -117,7 +118,7 @@ impl TaskManager {
 
     pub fn exit(&self, exit_code: isize) -> ! {
         let mut inner = self.inner_access();
-        let current = inner.current_task().unwrap();
+        let current = inner.current_task(false).unwrap();
         let idle_ctx = inner.idle_ctx();
         let current_ctx_ptr = current.lock().ctx_ptr();
         current.lock().set_status(ProcessStatus::EXITED(exit_code));
@@ -158,6 +159,16 @@ impl TaskManager {
     pub fn write(&self, fd: usize, buf: *mut u8, len: usize) -> isize {
         let mut inner = self.inner_access();
         inner.write(fd, buf, len)
+    }
+
+    pub fn create_pipe(&self, size: usize) -> (usize, usize) {
+        let mut inner = self.inner_access();
+        inner.create_pipe(size)
+    }
+
+    pub fn read(&self, fd: usize, buf: *mut u8, len: usize) -> isize {
+        let mut inner = self.inner_access();
+        inner.read(fd, buf, len)
     }
 }
 
@@ -226,13 +237,17 @@ impl AppManagerInner {
         }
     } 
 
-    fn current_task(&mut self) -> Option<Arc<Mutex<Process>>> {
+    fn current_task(&mut self, must: bool) -> Option<Arc<Mutex<Process>>> {
         match self.task(self.current) {
             Ok(p) => {
                 Some(p)
             }
             Err(_) => {
-                self.next_task()
+                if must == false {
+                    return self.next_task()
+                } else {
+                    return None;
+                }
             } 
         }
     }
@@ -259,14 +274,14 @@ impl AppManagerInner {
     }
 
     pub fn fork(&mut self) -> isize {
-        let child = self.current_task().unwrap().lock().fork();
+        let child = self.current_task(true).unwrap().lock().fork();
         let pid = child.upgrade().unwrap().lock().pid.0;
         self.tasks.push(child);
         pid as isize
     }
 
     pub fn exec(&mut self, elf: usize) -> isize {
-        match self.current_task().unwrap().lock().exec(elf) {
+        match self.current_task(true).unwrap().lock().exec(elf) {
             Ok(_) => {return 0;}
             Err(e) => {
                 println!("[kernel] exec failed {}", e);
@@ -276,15 +291,23 @@ impl AppManagerInner {
     }
 
     pub fn cow(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
-        self.current_task().unwrap().lock().cow(vpn)
+        self.current_task(true).unwrap().lock().cow(vpn)
     }
 
     pub fn wait(&mut self, pid: isize) -> isize {
-        self.current_task().unwrap().lock().wait(pid)
+        self.current_task(true).unwrap().lock().wait(pid)
     }
 
     pub fn write(&mut self, fd: usize, buf: *mut u8, len: usize) -> isize {
-        self.current_task().unwrap().lock().write(fd, buf, len)
+        self.current_task(true).unwrap().lock().write(fd, buf, len)
+    }
+
+    pub fn create_pipe(&mut self, size: usize) -> (usize, usize) {
+        self.current_task(true).unwrap().lock().create_pipe(size)
+    }
+
+    pub fn read(&mut self, fd: usize, buf: *mut u8, len: usize) -> isize {
+        self.current_task(true).unwrap().lock().read(fd, buf, len)
     }
 }
 
@@ -459,7 +482,31 @@ impl Process {
         }
 
         println!("[kernel] {} file not in fd table", fd);
-        return 0;
+        return -2;
+    }
+
+    pub fn create_pipe(&mut self, size: usize) -> (usize, usize)  {
+        let (read_pipe, write_pipe) = Pipe::new(size);
+        self.fds.push(Some(read_pipe));
+        let read_fd = self.fds.len() - 1;
+        self.fds.push(Some(write_pipe));
+        let write_fd = self.fds.len() - 1;
+        (read_fd, write_fd)
+    }
+
+    pub fn read(&self, fd: usize, buf: *mut u8, len: usize) -> isize {
+        let user_buf = UserBuffer::new_from_raw(buf, len);
+        if let Some(file) = &self.fds[fd] {
+            if file.readable() {
+                return file.read(user_buf) as isize;
+            } else {
+                println!("[kernel] {} file is None", fd);
+                return -1;
+            }
+        }
+
+        println!("[kernel] {} file not in fd table", fd);
+        return -2;
     }
 }
 

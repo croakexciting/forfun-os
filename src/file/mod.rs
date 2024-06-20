@@ -1,5 +1,5 @@
-pub mod inode;
 pub mod stdio;
+pub mod pipe;
 
 use crate::mm::area::UserBuffer;
 

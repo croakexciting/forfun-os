@@ -63,3 +63,11 @@ pub fn wait(pid: isize) -> isize {
 pub fn write(fd: usize, buf: *mut u8, len: usize) -> isize {
     TASK_MANAGER.write(fd, buf, len)
 }
+
+pub fn create_pipe(size: usize) -> (usize, usize) {
+    TASK_MANAGER.create_pipe(size)
+}
+
+pub fn read(fd: usize, buf: *mut u8, len: usize) -> isize {
+    TASK_MANAGER.read(fd, buf, len)
+}
