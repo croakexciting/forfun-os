@@ -3,8 +3,10 @@
 use alloc::sync::Arc;
 use bitflags::bitflags;
 use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 
 use crate::arch::riscv64::{
+    copy_from_user_into_vector, 
     copy_user_page_to_vector, 
     copy_vector_to_user_page
 };
@@ -202,5 +204,28 @@ bitflags! {
         const W = 1 << 2;
         const X = 1 << 3;
         const U = 1 << 4;
+    }
+}
+
+pub struct UserBuffer {
+    // 为了不在 unsafe 中使用，采用引用的方式，'static 生命周期相当于告诉编译器不要去检查
+    pub buffer: &'static mut [u8]
+}
+
+impl UserBuffer {
+    #[allow(unused)]
+    pub fn new(b: &'static mut [u8]) -> Self {
+        Self { buffer: b }
+    }
+
+    pub fn new_from_raw(addr: *mut u8, len: usize) -> Self {
+        unsafe {
+            let buffer = core::slice::from_raw_parts_mut(addr, len);
+            Self { buffer }
+        }
+    }
+
+    pub fn copy_to_vector(&self) -> Vec<u8> {
+        copy_from_user_into_vector(self.buffer.as_ptr(), self.buffer.len())
     }
 }

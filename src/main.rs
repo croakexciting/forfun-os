@@ -14,6 +14,7 @@ mod syscall;
 mod process;
 mod mm;
 mod driver;
+mod file;
 
 #[cfg(feature = "riscv_qemu")]
 #[path = "board/riscv_qemu.rs"]

@@ -2,7 +2,10 @@ use core::borrow::BorrowMut;
 use core::cell::RefMut;
 use core::arch::asm;
 
+use crate::file::stdio::Stdout;
+use crate::file::File;
 use crate::mm::allocator::{asid_alloc, AisdHandler};
+use crate::mm::area::UserBuffer;
 use crate::mm::basic::VirtPage;
 use crate::mm::MemoryManager;
 use crate::process::switch::__switch;
@@ -151,6 +154,11 @@ impl TaskManager {
         let mut inner = self.inner_access();
         inner.wait(pid)
     }
+
+    pub fn write(&self, fd: usize, buf: *mut u8, len: usize) -> isize {
+        let mut inner = self.inner_access();
+        inner.write(fd, buf, len)
+    }
 }
 
 pub struct AppManagerInner {
@@ -274,6 +282,10 @@ impl AppManagerInner {
     pub fn wait(&mut self, pid: isize) -> isize {
         self.current_task().unwrap().lock().wait(pid)
     }
+
+    pub fn write(&mut self, fd: usize, buf: *mut u8, len: usize) -> isize {
+        self.current_task().unwrap().lock().write(fd, buf, len)
+    }
 }
 
 pub struct Process {
@@ -286,6 +298,7 @@ pub struct Process {
     ctx: SwitchContext,
     mm: MemoryManager,
     asid: AisdHandler,
+    fds: Vec<Option<Arc<dyn File>>>,
 }
 
 impl Process {
@@ -300,6 +313,14 @@ impl Process {
             ctx: SwitchContext::bare(),
             mm: MemoryManager::new(),
             asid: asid_alloc().unwrap(),
+            fds: vec![
+                // 0 -> stdin
+                None,
+                // 1 -> stdout
+                Some(Arc::new(Stdout)),
+                // 2 -> stderr
+                None,
+            ]
         }
     }
 
@@ -319,6 +340,7 @@ impl Process {
                 ctx: switch_ctx,
                 mm,
                 asid: asid_alloc().unwrap(),
+                fds: self.fds.clone(),
             }
         ));
 
@@ -422,6 +444,22 @@ impl Process {
     // 出现页错误时，copy on write
     pub fn cow(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
         self.mm.cow(vpn)
+    }
+
+    // write
+    pub fn write(&self, fd: usize, buf: *mut u8, len: usize) -> isize {
+        let user_buf = UserBuffer::new_from_raw(buf, len);
+        if let Some(file) = &self.fds[fd] {
+            if file.writable() {
+                return file.write(user_buf) as isize;
+            } else {
+                println!("[kernel] {} file is None", fd);
+                return -1;
+            }
+        }
+
+        println!("[kernel] {} file not in fd table", fd);
+        return 0;
     }
 }
 

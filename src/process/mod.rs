@@ -59,3 +59,7 @@ pub fn cow(va: usize) -> Result<(), &'static str> {
 pub fn wait(pid: isize) -> isize {
     TASK_MANAGER.wait(pid)
 }
+
+pub fn write(fd: usize, buf: *mut u8, len: usize) -> isize {
+    TASK_MANAGER.write(fd, buf, len)
+}
