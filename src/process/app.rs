@@ -167,8 +167,22 @@ impl TaskManager {
     }
 
     pub fn read(&self, fd: usize, buf: *mut u8, len: usize) -> isize {
-        let mut inner = self.inner_access();
-        inner.read(fd, buf, len)
+        let mut read = 0;
+        loop {
+            let mut inner = self.inner_access();
+            let ret = inner.read(fd, buf, len);
+            if ret < 0 {
+                return ret;
+            }
+
+            read += ret;
+            if (read as usize) < len {
+                drop(inner);
+                self.back_to_idle();
+            } else {
+                return read
+            }
+        }
     }
 }
 

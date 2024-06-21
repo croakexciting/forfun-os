@@ -56,3 +56,11 @@ pub fn copy_vector_to_user_page(v: Vec<u8>, vpn: VirtPage) {
     let dst = vpn.bytes_array().as_mut_ptr();
     copy_vector_to_user(v, dst);
 }
+
+pub fn copy_usize_with_user(src: usize, dst: &mut usize) {
+    unsafe {
+        riscv::register::sstatus::set_sum();
+        *dst = src;
+        riscv::register::sstatus::clear_sum();
+    }
+}
