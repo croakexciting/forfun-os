@@ -31,6 +31,7 @@ pub struct MapArea {
     // 放在这里只是为了在 drop 的时候自动执行 dealloc 回收这些物理页帧到 alloctor
     // virtual page => physframe
     frames: BTreeMap<usize, Arc<PhysFrame>>,
+    shared: Vec<VirtPage>,
 }
 
 // 简单设计，一个 map area 中的内存页帧是一起创建，一起消失的。同时起始位置必须 4K对齐
@@ -48,6 +49,7 @@ impl MapArea {
             frames: BTreeMap::new(),
             map_type,
             permission,
+            shared: Vec::new(),
         }
     }
 
@@ -152,8 +154,9 @@ impl MapArea {
         return 0;
     }
 
-    pub fn fork(&self, pt: &mut PageTable, child_pt: &mut PageTable) -> Self {
+    pub fn fork(&mut self, pt: &mut PageTable, child_pt: &mut PageTable) -> Self {
         let mut child_frames: BTreeMap<usize, Arc<PhysFrame>> = BTreeMap::new();
+        self.shared.clear();
 
         for (k, v) in self.frames.iter() {
             let pte = pt.find_valid_pte((*k).into()).unwrap();
@@ -163,6 +166,9 @@ impl MapArea {
             child_pt.map((*k).into(), v.ppn, flags).unwrap();
             pt.remap((*k).into(), v.ppn, flags).unwrap();
             child_frames.insert(*k, v.clone());
+
+            // put this page into shared
+            self.shared.push(VirtPage::from(*k));
         }
         
         Self {
@@ -171,20 +177,27 @@ impl MapArea {
             map_type: self.map_type,
             permission: self.permission,
             frames: child_frames,
+            shared: self.shared.clone(),
         } 
     }
 
     pub fn cow(&mut self, pt: &mut PageTable, vpn: VirtPage) -> Result<(), &'static str> {
-        let data = copy_user_page_to_vector(vpn);
-        if (self.unmap_one(pt, vpn)) < 0 {
-            return Err("unmap failed");
-        }
-
-        if let Some(_) = self.map_one(pt, vpn) {
-            copy_vector_to_user_page(data, vpn);
-            Ok(())
+        // checkn vpn if shared
+        if let Some(index) = self.shared.iter().position(|&v| v.0 == vpn.0) {
+            self.shared.remove(index);
+            let data = copy_user_page_to_vector(vpn);
+            if (self.unmap_one(pt, vpn)) < 0 {
+                return Err("unmap failed");
+            }
+    
+            if let Some(_) = self.map_one(pt, vpn) {
+                copy_vector_to_user_page(data, vpn);
+                Ok(())
+            } else {
+                return Err("remap failed");
+            }   
         } else {
-            return Err("remap failed");
+            return Err("VPN is not shared");
         }
     }
 }

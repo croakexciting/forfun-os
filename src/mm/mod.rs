@@ -222,7 +222,7 @@ impl MemoryManager {
     pub fn fork(&mut self, parent: &mut Self) {
         // 将父进程的所有 app area 复制一份，并且为 physframe 计数 +1
         self.app_areas.reserve(parent.app_areas.len());
-        for area in parent.app_areas.iter() {
+        for area in parent.app_areas.iter_mut() {
             let new_area = area.fork(&mut parent.pt, &mut self.pt);
             self.app_areas.push(new_area);
         }

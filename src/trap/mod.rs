@@ -8,7 +8,7 @@ use riscv::register::{
 };
 
 use crate::{
-    process::{back_to_idle, cow, exit}, 
+    process::{app::SignalCode, back_to_idle, cow, exit, save_trap_ctx, set_signal, signal::{SIGILL, SIGSEGV}, signal_handler}, 
     syscall::syscall, 
     utils::timer::set_trigger
 };
@@ -52,27 +52,28 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
         }
         Trap::Exception(Exception::StoreFault)
         | Trap::Exception(Exception::StorePageFault) => {
-            println!("[kernel] store pagefault in application, bad addr = {:#x}, bad instruction = {:#x}.", stval, ctx.sepc);
             let r = cow(stval);
             match r {
                 Ok(_) => {
-                    println!("[kernel] copy on write success");
                     back_to_idle();
                 }
                 Err(e) => {
                     println!("[kernel] copy on write failed: {}, kernel killed it.", e);
-                    exit(-1001);
+                    set_signal(None, SIGSEGV);
                 }
             }
+        }
+        Trap::Exception(Exception::LoadFault)
+        | Trap::Exception(Exception::LoadPageFault) => {
+            println!("[kernel] PageFault in application, kernel killed it.");
+            set_signal(None, SIGSEGV);
         }
         Trap::Exception(Exception::IllegalInstruction)
         | Trap::Exception(Exception::InstructionFault)
         | Trap::Exception(Exception::InstructionPageFault)
-        | Trap::Exception(Exception::InstructionMisaligned)
-        | Trap::Exception(Exception::LoadFault)
-        | Trap::Exception(Exception::LoadPageFault) => {
+        | Trap::Exception(Exception::InstructionMisaligned) => {
             println!("[kernel] IllegalInstruction in application, kernel killed it.");
-            exit(-1002);
+            set_signal(None, SIGILL);
         }
         _ => {
             panic!(
@@ -80,6 +81,22 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
                 scause.cause(),
                 stval
             )
+        }
+    }
+
+    let signal_code = signal_handler();
+    match signal_code {
+        SignalCode::IGNORE => {
+            // do nothing
+        }
+        SignalCode::Action(handler) => {
+            // save ctx for sigreturn
+            save_trap_ctx();
+            ctx.sepc = handler.handler;
+            ctx.x[10] = handler.sig;
+        }
+        SignalCode::KILL(e) => {
+            exit(e)
         }
     }
 
