@@ -4,6 +4,7 @@ pub mod app;
 pub mod switch;
 pub mod context;
 pub mod pid;
+pub mod signal;
 
 use app::*;
 use alloc::sync::Arc;
@@ -58,4 +59,44 @@ pub fn cow(va: usize) -> Result<(), &'static str> {
 
 pub fn wait(pid: isize) -> isize {
     TASK_MANAGER.wait(pid)
+}
+
+pub fn write(fd: usize, buf: *mut u8, len: usize) -> isize {
+    TASK_MANAGER.write(fd, buf, len)
+}
+
+pub fn create_pipe(size: usize) -> (usize, usize) {
+    TASK_MANAGER.create_pipe(size)
+}
+
+pub fn read(fd: usize, buf: *mut u8, len: usize) -> isize {
+    TASK_MANAGER.read(fd, buf, len)
+}
+
+pub fn sigaction(signal: usize, handler: usize) -> isize {
+    TASK_MANAGER.sigaction(signal, handler)
+}
+
+pub fn set_signal(pid: Option<usize>, signal: usize) -> isize {
+    TASK_MANAGER.set_signal(pid, signal)
+}
+
+pub fn set_signalmask(signal: usize) -> isize {
+    TASK_MANAGER.set_signalmask(signal)
+}
+
+pub fn signal_handler() -> SignalCode {
+    TASK_MANAGER.signal_handler()
+}
+
+pub fn save_trap_ctx() {
+    TASK_MANAGER.save_trap_ctx()
+}
+
+pub fn sigreturn() -> isize {
+    TASK_MANAGER.sigreturn()
+}
+
+pub fn getpid() -> usize {
+    TASK_MANAGER.getpid()
 }

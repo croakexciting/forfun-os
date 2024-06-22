@@ -3,8 +3,10 @@
 use alloc::sync::Arc;
 use bitflags::bitflags;
 use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
 
 use crate::arch::riscv64::{
+    copy_from_user_into_vector, 
     copy_user_page_to_vector, 
     copy_vector_to_user_page
 };
@@ -29,6 +31,7 @@ pub struct MapArea {
     // 放在这里只是为了在 drop 的时候自动执行 dealloc 回收这些物理页帧到 alloctor
     // virtual page => physframe
     frames: BTreeMap<usize, Arc<PhysFrame>>,
+    shared: Vec<VirtPage>,
 }
 
 // 简单设计，一个 map area 中的内存页帧是一起创建，一起消失的。同时起始位置必须 4K对齐
@@ -46,6 +49,7 @@ impl MapArea {
             frames: BTreeMap::new(),
             map_type,
             permission,
+            shared: Vec::new(),
         }
     }
 
@@ -150,8 +154,9 @@ impl MapArea {
         return 0;
     }
 
-    pub fn fork(&self, pt: &mut PageTable, child_pt: &mut PageTable) -> Self {
+    pub fn fork(&mut self, pt: &mut PageTable, child_pt: &mut PageTable) -> Self {
         let mut child_frames: BTreeMap<usize, Arc<PhysFrame>> = BTreeMap::new();
+        self.shared.clear();
 
         for (k, v) in self.frames.iter() {
             let pte = pt.find_valid_pte((*k).into()).unwrap();
@@ -161,6 +166,9 @@ impl MapArea {
             child_pt.map((*k).into(), v.ppn, flags).unwrap();
             pt.remap((*k).into(), v.ppn, flags).unwrap();
             child_frames.insert(*k, v.clone());
+
+            // put this page into shared
+            self.shared.push(VirtPage::from(*k));
         }
         
         Self {
@@ -169,20 +177,27 @@ impl MapArea {
             map_type: self.map_type,
             permission: self.permission,
             frames: child_frames,
+            shared: self.shared.clone(),
         } 
     }
 
     pub fn cow(&mut self, pt: &mut PageTable, vpn: VirtPage) -> Result<(), &'static str> {
-        let data = copy_user_page_to_vector(vpn);
-        if (self.unmap_one(pt, vpn)) < 0 {
-            return Err("unmap failed");
-        }
-
-        if let Some(_) = self.map_one(pt, vpn) {
-            copy_vector_to_user_page(data, vpn);
-            Ok(())
+        // checkn vpn if shared
+        if let Some(index) = self.shared.iter().position(|&v| v.0 == vpn.0) {
+            self.shared.remove(index);
+            let data = copy_user_page_to_vector(vpn);
+            if (self.unmap_one(pt, vpn)) < 0 {
+                return Err("unmap failed");
+            }
+    
+            if let Some(_) = self.map_one(pt, vpn) {
+                copy_vector_to_user_page(data, vpn);
+                Ok(())
+            } else {
+                return Err("remap failed");
+            }   
         } else {
-            return Err("remap failed");
+            return Err("VPN is not shared");
         }
     }
 }
@@ -202,5 +217,37 @@ bitflags! {
         const W = 1 << 2;
         const X = 1 << 3;
         const U = 1 << 4;
+    }
+}
+
+pub struct UserBuffer {
+    // 为了不在 unsafe 中使用，采用引用的方式，'static 生命周期相当于告诉编译器不要去检查
+    pub buffer: &'static mut [u8]
+}
+
+impl UserBuffer {
+    #[allow(unused)]
+    pub fn new(b: &'static mut [u8]) -> Self {
+        // 简单起见，声明一个 userbuffer 时，会自动将 sum flag 置 1
+        unsafe { riscv::register::sstatus::set_sum() };
+        Self { buffer: b }
+    }
+
+    pub fn new_from_raw(addr: *mut u8, len: usize) -> Self {
+        unsafe {
+            riscv::register::sstatus::set_sum();
+            let buffer = core::slice::from_raw_parts_mut(addr, len);
+            Self { buffer }
+        }
+    }
+
+    pub fn copy_to_vector(&self) -> Vec<u8> {
+        copy_from_user_into_vector(self.buffer.as_ptr(), self.buffer.len())
+    }
+}
+
+impl Drop for UserBuffer {
+    fn drop(&mut self) {
+        unsafe { riscv::register::sstatus::clear_sum() };
     }
 }

@@ -14,6 +14,7 @@ mod syscall;
 mod process;
 mod mm;
 mod driver;
+mod file;
 
 #[cfg(feature = "riscv_qemu")]
 #[path = "board/riscv_qemu.rs"]
@@ -56,7 +57,7 @@ pub fn init_heap() {
         fn eheap();
     }
 
-    println!("heap start at {:#x}, end at {:#x}", sheap as usize, eheap as usize);
+    println!("[kernel] heap start at {:#x}, end at {:#x}", sheap as usize, eheap as usize);
     unsafe {
         HEAP_ALLOCATOR
             .lock()

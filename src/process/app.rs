@@ -1,8 +1,13 @@
 use core::borrow::BorrowMut;
 use core::cell::RefMut;
 use core::arch::asm;
+use core::ops::{BitAnd, BitOr};
 
+use crate::file::pipe::Pipe;
+use crate::file::stdio::Stdout;
+use crate::file::File;
 use crate::mm::allocator::{asid_alloc, AisdHandler};
+use crate::mm::area::UserBuffer;
 use crate::mm::basic::VirtPage;
 use crate::mm::MemoryManager;
 use crate::process::switch::__switch;
@@ -10,8 +15,10 @@ use crate::trap::context::TrapContext;
 use crate::utils::timer::nanoseconds;
 use crate::utils::type_extern::RefCellWrap;
 
+use alloc::borrow::ToOwned;
 use alloc::sync::{Arc, Weak};
 use alloc::collections::BTreeMap;
+use bitflags::Flags;
 use spin::mutex::Mutex;
 use alloc::{format, vec};
 use alloc::vec::Vec;
@@ -19,6 +26,7 @@ use riscv::register::satp;
 
 use super::context::SwitchContext;
 use super::pid::{self, PidHandler};
+use super::signal::{self, SignalAction, SignalFlags, SIG_NUM};
 
 pub struct TaskManager {
     inner: RefCellWrap<AppManagerInner>,
@@ -41,7 +49,7 @@ impl TaskManager {
             let mut inner = self.inner_access();
             let idle_ctx = inner.idle_ctx();
             // 暂时简化处理，如果获取不到当前任务，会直接 panic
-            let current = inner.current_task().unwrap();
+            let current = inner.current_task(false).unwrap();
             let current_status = current.lock().status;
             if let RUNNING(tick) = current_status {
                 if tick - 1 > 0 {
@@ -97,14 +105,14 @@ impl TaskManager {
     pub fn back_to_idle(&self) {
         let mut inner = self.inner_access();
         let idle_ctx = inner.idle_ctx();
-        let current_ctx_ptr = inner.current_task().unwrap().lock().ctx_ptr();
+        let current_ctx_ptr = inner.current_task(false).unwrap().lock().ctx_ptr();
         drop(inner);
         unsafe { __switch(current_ctx_ptr, idle_ctx); }
     }
 
     pub fn sleep(&self, duration: usize) {
         let mut inner = self.inner_access();
-        let current = inner.current_task().unwrap();
+        let current = inner.current_task(false).unwrap();
         current.lock().set_status(ProcessStatus::SLEEP(nanoseconds(), duration));
         drop(current);
         drop(inner);
@@ -114,7 +122,7 @@ impl TaskManager {
 
     pub fn exit(&self, exit_code: isize) -> ! {
         let mut inner = self.inner_access();
-        let current = inner.current_task().unwrap();
+        let current = inner.current_task(false).unwrap();
         let idle_ctx = inner.idle_ctx();
         let current_ctx_ptr = current.lock().ctx_ptr();
         current.lock().set_status(ProcessStatus::EXITED(exit_code));
@@ -150,6 +158,70 @@ impl TaskManager {
     pub fn wait(&self, pid: isize) -> isize {
         let mut inner = self.inner_access();
         inner.wait(pid)
+    }
+
+    pub fn write(&self, fd: usize, buf: *mut u8, len: usize) -> isize {
+        let mut inner = self.inner_access();
+        inner.write(fd, buf, len)
+    }
+
+    pub fn create_pipe(&self, size: usize) -> (usize, usize) {
+        let mut inner = self.inner_access();
+        inner.create_pipe(size)
+    }
+
+    pub fn read(&self, fd: usize, buf: *mut u8, len: usize) -> isize {
+        let mut read = 0;
+        loop {
+            let mut inner = self.inner_access();
+            let ret = inner.read(fd, buf, len);
+            if ret < 0 {
+                return ret;
+            }
+
+            read += ret;
+            if (read as usize) < len {
+                drop(inner);
+                self.back_to_idle();
+            } else {
+                return read
+            }
+        }
+    }
+
+    pub fn sigaction(&self, signal: usize, handler: usize) -> isize {
+        let mut inner = self.inner_access();
+        inner.sigaction(signal, handler)
+    }
+
+    pub fn set_signal(&self, pid: Option<usize>, signal: usize) -> isize {
+        let mut inner = self.inner_access();
+        inner.set_signal(pid, signal)
+    }
+
+    pub fn set_signalmask(&self, signal: usize) -> isize {
+        let mut inner = self.inner_access();
+        inner.set_signalmask(signal)
+    }
+
+    pub fn signal_handler(&self) -> SignalCode {
+        let mut inner = self.inner.exclusive_access();
+        inner.signal_check()
+    }
+
+    pub fn save_trap_ctx(&self) {
+        let mut inner = self.inner.exclusive_access();
+        inner.save_trap_ctx()
+    }
+
+    pub fn sigreturn(&self) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        inner.sigreturn()
+    }
+
+    pub fn getpid(&self) -> usize {
+        let mut inner = self.inner.exclusive_access();
+        inner.getpid()
     }
 }
 
@@ -218,13 +290,17 @@ impl AppManagerInner {
         }
     } 
 
-    fn current_task(&mut self) -> Option<Arc<Mutex<Process>>> {
+    fn current_task(&mut self, must: bool) -> Option<Arc<Mutex<Process>>> {
         match self.task(self.current) {
             Ok(p) => {
                 Some(p)
             }
             Err(_) => {
-                self.next_task()
+                if must == false {
+                    return self.next_task()
+                } else {
+                    return None;
+                }
             } 
         }
     }
@@ -251,14 +327,14 @@ impl AppManagerInner {
     }
 
     pub fn fork(&mut self) -> isize {
-        let child = self.current_task().unwrap().lock().fork();
+        let child = Process::fork(self.current_task(true).unwrap().clone());
         let pid = child.upgrade().unwrap().lock().pid.0;
         self.tasks.push(child);
         pid as isize
     }
 
     pub fn exec(&mut self, elf: usize) -> isize {
-        match self.current_task().unwrap().lock().exec(elf) {
+        match self.current_task(true).unwrap().lock().exec(elf) {
             Ok(_) => {return 0;}
             Err(e) => {
                 println!("[kernel] exec failed {}", e);
@@ -268,11 +344,63 @@ impl AppManagerInner {
     }
 
     pub fn cow(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
-        self.current_task().unwrap().lock().cow(vpn)
+        self.current_task(true).unwrap().lock().cow(vpn)
     }
 
     pub fn wait(&mut self, pid: isize) -> isize {
-        self.current_task().unwrap().lock().wait(pid)
+        self.current_task(true).unwrap().lock().wait(pid)
+    }
+
+    pub fn write(&mut self, fd: usize, buf: *mut u8, len: usize) -> isize {
+        self.current_task(true).unwrap().lock().write(fd, buf, len)
+    }
+
+    pub fn create_pipe(&mut self, size: usize) -> (usize, usize) {
+        self.current_task(true).unwrap().lock().create_pipe(size)
+    }
+
+    pub fn read(&mut self, fd: usize, buf: *mut u8, len: usize) -> isize {
+        self.current_task(true).unwrap().lock().read(fd, buf, len)
+    }
+
+    pub fn sigaction(&mut self, signal: usize, handler: usize) -> isize {
+        self.current_task(true).unwrap().lock().sigaction(signal, SignalAction::new(signal, handler))
+    }
+
+    pub fn set_signal(&mut self, pid: Option<usize>, signal: usize) -> isize {
+        if let Some(pid) = pid {
+            for task in (&self.tasks).into_iter() {
+                if let Some(t) = task.upgrade() {
+                    if t.lock().pid.0 == pid {
+                        return t.lock().set_signal(signal)
+                    }
+                }
+            }
+        } else {
+            return self.current_task(true).unwrap().lock().set_signal(signal);
+        }
+
+        -1
+    }
+
+    pub fn set_signalmask(&mut self, mask: usize) -> isize {
+        self.current_task(true).unwrap().lock().set_signalmask(mask)
+    }
+
+    pub fn signal_check(&mut self) -> SignalCode {
+        self.current_task(true).unwrap().lock().signal_check()
+    }
+
+    pub fn save_trap_ctx(&mut self) {
+        self.current_task(true).unwrap().lock().save_trap_ctx()
+    }
+
+    pub fn sigreturn(&mut self) -> isize {
+        self.current_task(true).unwrap().lock().sigreturn()
+    }
+
+    pub fn getpid(&mut self) -> usize {
+        self.current_task(true).unwrap().lock().pid.0
     }
 }
 
@@ -280,12 +408,20 @@ pub struct Process {
     pub tick: usize,
     pub status: ProcessStatus,
     pub pid: PidHandler,
-    pub parent: Option<usize>,
+    pub parent: Option<Weak<Mutex<Self>>>,
     pub children: BTreeMap<usize, Arc<Mutex<Self>>>,
     
     ctx: SwitchContext,
     mm: MemoryManager,
     asid: AisdHandler,
+    fds: Vec<Option<Arc<dyn File>>>,
+    signals: SignalFlags,
+    signals_mask: SignalFlags,
+    // 没有 handler，默认啥也不做，忽略
+    signal_actions: Vec<Option<SignalAction>>,
+
+    // TODO: add trap_ctx_backup
+    trap_ctx_backup: Option<TrapContext>,
 }
 
 impl Process {
@@ -300,30 +436,53 @@ impl Process {
             ctx: SwitchContext::bare(),
             mm: MemoryManager::new(),
             asid: asid_alloc().unwrap(),
+            fds: vec![
+                // 0 -> stdin
+                None,
+                // 1 -> stdout
+                Some(Arc::new(Stdout)),
+                // 2 -> stderr
+                None,
+            ],
+            signals: SignalFlags::empty(),
+            signals_mask: SignalFlags::all(),
+            signal_actions: vec![None; SIG_NUM],
+            trap_ctx_backup: None,
         }
     }
 
-    pub fn fork(&mut self) -> Weak<Mutex<Self>> {
+    pub fn fork(parent: Arc<Mutex<Self>>) -> Weak<Mutex<Self>> {
         let mut mm = MemoryManager::new();
-        mm.fork(&mut self.mm);
+        mm.fork(&mut parent.lock().mm);
         let switch_ctx = SwitchContext::new_with_restore_addr_and_sp();
         let pid = pid::alloc().unwrap();
         let key = pid.0;
+        let tick = parent.lock().tick;
+        let fds = parent.lock().fds.clone();
+        let signals =  parent.lock().signals;
+        let signals_mask = parent.lock().signals_mask;
+        let signal_actions = parent.lock().signal_actions.clone();
+
         let child = Arc::new(Mutex::new(
             Self {
-                tick: self.tick,
+                tick,
                 status: ProcessStatus::READY,
                 pid,
-                parent: Some(self.pid.0),
+                parent: Some(Arc::downgrade(&parent)),
                 children: BTreeMap::new(),
                 ctx: switch_ctx,
                 mm,
                 asid: asid_alloc().unwrap(),
+                fds,
+                signals,
+                signals_mask,
+                signal_actions,
+                trap_ctx_backup: None,
             }
         ));
 
         let weak = Arc::downgrade(&child);
-        self.children.insert(key, child);
+        parent.lock().children.insert(key, child);
         weak
     }
 
@@ -423,6 +582,99 @@ impl Process {
     pub fn cow(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
         self.mm.cow(vpn)
     }
+
+    // write
+    pub fn write(&self, fd: usize, buf: *mut u8, len: usize) -> isize {
+        let user_buf = UserBuffer::new_from_raw(buf, len);
+        if let Some(file) = &self.fds[fd] {
+            if file.writable() {
+                return file.write(user_buf) as isize;
+            } else {
+                println!("[kernel] {} file is None", fd);
+                return -1;
+            }
+        }
+
+        println!("[kernel] {} file not in fd table", fd);
+        return -2;
+    }
+
+    pub fn create_pipe(&mut self, size: usize) -> (usize, usize)  {
+        let (read_pipe, write_pipe) = Pipe::new(size);
+        self.fds.push(Some(read_pipe));
+        let read_fd = self.fds.len() - 1;
+        self.fds.push(Some(write_pipe));
+        let write_fd = self.fds.len() - 1;
+        (read_fd, write_fd)
+    }
+
+    pub fn read(&self, fd: usize, buf: *mut u8, len: usize) -> isize {
+        let user_buf = UserBuffer::new_from_raw(buf, len);
+        if let Some(file) = &self.fds[fd] {
+            if file.readable() {
+                return file.read(user_buf) as isize;
+            } else {
+                println!("[kernel] {} file is None", fd);
+                return -1;
+            }
+        }
+
+        println!("[kernel] {} file not in fd table", fd);
+        return -2;
+    }
+
+    // signal
+    pub fn sigaction(&mut self, signal: usize, action: SignalAction) -> isize {
+        self.signal_actions[signal] = Some(action);
+
+        0
+    }
+
+    pub fn set_signal(&mut self, signal: usize) -> isize {
+        let signal = SignalFlags::from_bits_truncate(1 << signal);
+        self.signals.insert(signal);
+        
+        0
+    }
+
+    pub fn set_signalmask(&mut self, mask: usize) -> isize {
+        self.signals_mask = SignalFlags::from_bits_truncate(mask as u32);
+
+        0
+    }
+
+    pub fn signal_check(&mut self) -> SignalCode {
+        let signals = self.signals.bitand(self.signals_mask);
+        // 如果有多个信号，从低到高返回第一个找到的信号量
+        if let Some(e) = signals.check_error() {
+            println!("[kernel] Process {}: {}",self.pid.0, e.1);
+            self.signals.remove(SignalFlags::from_bits_truncate(1 << e.0));
+            return SignalCode::KILL(e.0 as isize);
+        }
+
+        if let Some(v) = signals.first_valid() {
+            if let Some(a) = self.signal_actions[v] {
+                self.signals.remove(SignalFlags::from_bits_truncate(1 << v));
+                return SignalCode::Action(a);
+            }
+        }
+
+        SignalCode::IGNORE
+    }
+
+    pub fn save_trap_ctx(&mut self) {
+        // save current trap context in self memory space
+        self.trap_ctx_backup = Some(self.mm.runtime_pull_context());
+    }
+
+    pub fn sigreturn(&mut self) -> isize {
+        // save current trap context in self memory space
+        if let Some(mut ctx) = self.trap_ctx_backup.to_owned() {
+            return self.mm.runtime_push_context(ctx) as isize
+        }
+
+        -1
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -434,4 +686,10 @@ pub enum ProcessStatus {
     // sleep status with start and duration timestamp(ns) 
     SLEEP(usize, usize),
     EXITED(isize),
+}
+
+pub enum SignalCode {
+    IGNORE,
+    Action(SignalAction),
+    KILL(isize),
 }
