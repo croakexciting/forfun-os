@@ -8,7 +8,15 @@ use riscv::register::{
 };
 
 use crate::{
-    process::{app::SignalCode, back_to_idle, cow, exit, save_trap_ctx, set_signal, signal::{SIGILL, SIGSEGV}, signal_handler}, 
+    process::{
+        app::SignalCode, 
+        back_to_idle, 
+        cow, exit, 
+        save_trap_ctx, 
+        set_signal, 
+        signal_handler
+    }, 
+    ipc::signal::{SIGILL, SIGSEGV},
     syscall::syscall, 
     utils::timer::set_trigger
 };
@@ -51,7 +59,9 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
             back_to_idle();
         }
         Trap::Exception(Exception::StoreFault)
-        | Trap::Exception(Exception::StorePageFault) => {
+        | Trap::Exception(Exception::StorePageFault)
+        | Trap::Exception(Exception::LoadFault)
+        | Trap::Exception(Exception::LoadPageFault) => {
             let r = cow(stval);
             match r {
                 Ok(_) => {
@@ -62,11 +72,6 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
                     set_signal(None, SIGSEGV);
                 }
             }
-        }
-        Trap::Exception(Exception::LoadFault)
-        | Trap::Exception(Exception::LoadPageFault) => {
-            println!("[kernel] PageFault in application, kernel killed it.");
-            set_signal(None, SIGSEGV);
         }
         Trap::Exception(Exception::IllegalInstruction)
         | Trap::Exception(Exception::InstructionFault)

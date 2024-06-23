@@ -4,10 +4,9 @@ pub mod app;
 pub mod switch;
 pub mod context;
 pub mod pid;
-pub mod signal;
 
 use app::*;
-use alloc::sync::Arc;
+use alloc::{string::String, sync::Arc};
 use spin::mutex::Mutex;
 
 use crate::{
@@ -99,4 +98,12 @@ pub fn sigreturn() -> isize {
 
 pub fn getpid() -> usize {
     TASK_MANAGER.getpid()
+}
+
+pub fn mmap(size: usize, permission: usize) -> isize {
+    TASK_MANAGER.mmap(size, permission)
+}
+
+pub fn shm_open(id: usize, size: usize, permission: usize) -> isize {
+    TASK_MANAGER.create_or_open_shm(id, size, permission)
 }

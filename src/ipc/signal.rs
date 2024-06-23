@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use bitflags::*;
 
 pub const SIG_NUM: usize = 31;

@@ -53,7 +53,32 @@ impl MapArea {
         }
     }
 
-    pub fn map_one(&mut self, pt: &mut PageTable, vpn: VirtPage) -> Option<PageTableEntry> {
+    // pub fn new_shm(
+    //     start_va: VirtAddr,
+    //     size: usize,
+    //     permission: Permission
+    // ) -> Self {
+    //     // 要求必须 4K 对齐
+    //     assert!((start_va.0 % 4096) == 0);
+    //     assert!((size % 4096) == 0);
+    //     let start_vpn: VirtPage = start_va.into();
+    //     let page_num = size / 4096;
+    //     let end_vpn = start_vpn.add(page_num);
+    //     let mut shared = Vec::new();
+    //     for i in 0..page_num {
+    //         shared.push(start_vpn.add(i));
+    //     }
+    //     Self {
+    //         start_vpn,
+    //         end_vpn,
+    //         frames: BTreeMap::new(),
+    //         map_type: MapType::Framed,
+    //         permission,
+    //         shared,
+    //     }
+    // }
+
+    pub fn map_one(&mut self, pt: &mut PageTable, vpn: VirtPage, defined_ppn: Option<PhysPage>) -> Option<PageTableEntry> {
         let ppn: PhysPage;
         match self.map_type {
             MapType::Identical => {
@@ -65,6 +90,9 @@ impl MapArea {
                 let frame = frame_alloc()?;
                 ppn = frame.ppn;
                 self.frames.insert(vpn.0, Arc::new(frame));
+            }
+            MapType::Defined => {
+                ppn = defined_ppn.unwrap();
             }
         }
         let pte_flag = PTEFlags::from_bits(self.permission.bits())?;
@@ -78,10 +106,20 @@ impl MapArea {
 
     pub fn map(&mut self, pt: &mut PageTable) -> i32 {
         for v in self.start_vpn.0..self.end_vpn.0 {
-            self.map_one(pt, v.into());
+            self.map_one(pt, v.into(), None);
         }
 
         return 0;
+    }
+
+    pub fn map_defined(&mut self, pt: &mut PageTable, ppns: &Vec<PhysPage>) -> isize {
+        let mut index = 0;
+        for v in self.start_vpn.0..self.end_vpn.0 {
+            self.map_one(pt, v.into(), Some(ppns[index]));
+            index += 1;
+        }
+
+        0
     }
 
     pub fn map_with_data(&mut self, pt: &mut PageTable, data: &[u8]) -> Result<(), &'static str>{
@@ -89,17 +127,17 @@ impl MapArea {
             return Err("data length overflow");
         }
 
-        let mut offset: usize = 0;
         for v in self.start_vpn.0..self.end_vpn.0 {
             // map
-            let pte = self.map_one(pt, v.into());
+            let mut _offset: usize = 0;
+            let pte = self.map_one(pt, v.into(), None);
 
             // copy data page by page
             if let Some(p) = pte {
-                let src = &data[offset..data.len().min(offset + PAGE_SIZE)];
+                let src = &data[_offset..data.len().min(_offset + PAGE_SIZE)];
                 let dst = &mut p.ppn().bytes_array()[..src.len()];
                 dst.copy_from_slice(src);
-                offset += PAGE_SIZE;
+                _offset += PAGE_SIZE;
             } else {
                 return Err("pte map failed");
             }
@@ -117,7 +155,7 @@ impl MapArea {
         let mut offset: usize = 0;
         for v in self.start_vpn.0..self.end_vpn.0 {
             // map
-            let pte = self.map_one(pt, v.into());
+            let pte = self.map_one(pt, v.into(), None);
 
             // copy data page by page
             if let Some(mut p) = pte {
@@ -190,7 +228,7 @@ impl MapArea {
                 return Err("unmap failed");
             }
     
-            if let Some(_) = self.map_one(pt, vpn) {
+            if let Some(_) = self.map_one(pt, vpn, None) {
                 copy_vector_to_user_page(data, vpn);
                 Ok(())
             } else {
@@ -207,6 +245,7 @@ impl MapArea {
 pub enum MapType {
     Identical,
     Framed,
+    Defined,
 }
 
 bitflags! {
