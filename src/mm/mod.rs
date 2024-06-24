@@ -3,11 +3,13 @@ pub mod basic;
 pub mod allocator;
 pub mod area;
 pub mod elf;
+pub mod buddy;
 
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use area::{MapArea, Permission, MapType};
 use basic::{PhysAddr, PhysPage, VirtAddr, VirtPage, PAGE_SIZE};
+use buddy::BuddyAllocator;
 use pt::PageTable;
 use spin::mutex::Mutex;
 
@@ -33,7 +35,7 @@ pub struct MemoryManager {
     _device_area: MapArea,
     app_areas: Vec<Arc<Mutex<MapArea>>>,
     // 堆可用区域，左闭右开的集合
-    available: (VirtPage, VirtPage),
+    buddy_alloctor: Option<BuddyAllocator>,
 }
 
 impl MemoryManager {
@@ -86,20 +88,17 @@ impl MemoryManager {
             kernel_stack_area, 
             _device_area: device_area,
             app_areas,
-            available: (0.into(), 0.into()),
+            buddy_alloctor: None,
         }
     }
 
     fn alloc(&mut self, pn: usize) -> Option<(VirtPage, VirtPage)> {
-        // alloc 需要优化，支持 dealloc 功能
-        if (self.available.0.0 + pn) > self.available.1.0 {
-            println!("[kernel] virtual memory space run out");
-            return None;
+        if let Some(allocator) = &mut self.buddy_alloctor {
+            let start = allocator.alloc(pn)?;
+            Some((start, start.add(pn)))
+        } else {
+            None
         }
-
-        self.available.0.add(pn);
-
-        return Some((self.available.0, self.available.0.add(pn)));
     }
 
     // return kernel stack pointer
@@ -171,7 +170,9 @@ impl MemoryManager {
         }
 
         // 添加一个保护页
-        self.available.0 = offset.next();
+        let start_vpn = offset.next();
+        // 预留 512M，也就是 128*1000 个页
+        self.buddy_alloctor = Some(BuddyAllocator::new(10, start_vpn, 128*1000));
 
         let user_stack_top: VirtAddr = USER_STACK_START.into();
         let user_stack_bottom: VirtAddr = user_stack_top.reduce(USER_STACK_SIZE);
@@ -185,10 +186,6 @@ impl MemoryManager {
         self.app_areas.push(
             Arc::new(Mutex::new(stack_area))
         );
-
-        // 栈下面添加一个保护页，栈溢出时报错
-        let stack_bottom_vpn: VirtPage = user_stack_bottom.into();
-        self.available.1 = stack_bottom_vpn.prev();
 
         Ok((user_stack_top.0 - 0x100, elf.header.pt2.entry_point() as usize))
     }
@@ -215,7 +212,7 @@ impl MemoryManager {
             (*trap_ctx_ptr).x[10] = 0;
         }
         parent.pt.kunmap(kernel_stack_pa.reduce(1));
-        self.available = parent.available;
+        self.buddy_alloctor = parent.buddy_alloctor.clone();
     }
 
     pub fn root_ppn(&self) -> PhysPage {
