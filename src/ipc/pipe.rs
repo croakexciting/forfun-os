@@ -5,7 +5,7 @@ use spin::mutex::Mutex;
 
 use crate::mm::area::UserBuffer;
 
-use super::File;
+use crate::file::File;
 
 pub struct Pipe {
     readable: bool,

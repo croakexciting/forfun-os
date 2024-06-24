@@ -3,12 +3,13 @@ use core::cell::RefMut;
 use core::arch::asm;
 use core::ops::{BitAnd, BitOr};
 
-use crate::file::pipe::Pipe;
+use crate::ipc::pipe::Pipe;
 use crate::file::stdio::Stdout;
 use crate::file::File;
+use crate::ipc::shm::Shm;
 use crate::mm::allocator::{asid_alloc, AisdHandler};
 use crate::mm::area::UserBuffer;
-use crate::mm::basic::VirtPage;
+use crate::mm::basic::{VirtAddr, VirtPage, PAGE_SIZE};
 use crate::mm::MemoryManager;
 use crate::process::switch::__switch;
 use crate::trap::context::TrapContext;
@@ -16,6 +17,7 @@ use crate::utils::timer::nanoseconds;
 use crate::utils::type_extern::RefCellWrap;
 
 use alloc::borrow::ToOwned;
+use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::collections::BTreeMap;
 use bitflags::Flags;
@@ -26,7 +28,7 @@ use riscv::register::satp;
 
 use super::context::SwitchContext;
 use super::pid::{self, PidHandler};
-use super::signal::{self, SignalAction, SignalFlags, SIG_NUM};
+use crate::ipc::signal::{self, SignalAction, SignalFlags, SIG_NUM};
 
 pub struct TaskManager {
     inner: RefCellWrap<AppManagerInner>,
@@ -223,6 +225,17 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         inner.getpid()
     }
+
+    pub fn mmap(&self, size: usize, permission: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        inner.mmap(size, permission)
+    }
+
+    pub fn create_or_open_shm(&self, id: usize, size: usize, permission: usize) -> isize {
+        assert_eq!(size % PAGE_SIZE, 0);
+        let mut inner = self.inner.exclusive_access();
+        inner.create_or_open_shm(id, size / PAGE_SIZE, permission)
+    }
 }
 
 pub struct AppManagerInner {
@@ -234,6 +247,8 @@ pub struct AppManagerInner {
     // 存储 process 的 weak pointer, 用于调度
     tasks: Vec<Weak<Mutex<Process>>>,
     idle_ctx: SwitchContext,
+    // name -> shm
+    named_shm: BTreeMap<usize, Shm>,
 }
 
 impl AppManagerInner {
@@ -245,6 +260,7 @@ impl AppManagerInner {
             tasks: Vec::new(),
             // idle process is a unstop loop process
             idle_ctx: SwitchContext::new(0, 0),
+            named_shm: BTreeMap::new(),
         }
     }
 
@@ -402,6 +418,24 @@ impl AppManagerInner {
     pub fn getpid(&mut self) -> usize {
         self.current_task(true).unwrap().lock().pid.0
     }
+
+    pub fn mmap(&mut self, size: usize, permission: usize) -> isize {
+        self.current_task(true).unwrap().lock().mmap(size, permission)
+    }
+
+    pub fn create_or_open_shm(&mut self, id: usize, pn: usize, permission: usize) -> isize {
+        let current_task = self.current_task(true).unwrap();
+        if let Some(shm) = self.named_shm.get_mut(&id) {
+            // map with process memory manager
+            shm.map(&mut current_task.lock().mm)
+        } else {
+            // create a shm
+            let mut shm = Shm::new(pn, permission);
+            let r = shm.map(&mut current_task.lock().mm);
+            self.named_shm.insert(id, shm);
+            r
+        }
+    }
 }
 
 pub struct Process {
@@ -419,8 +453,6 @@ pub struct Process {
     signals_mask: SignalFlags,
     // 没有 handler，默认啥也不做，忽略
     signal_actions: Vec<Option<SignalAction>>,
-
-    // TODO: add trap_ctx_backup
     trap_ctx_backup: Option<TrapContext>,
 }
 
@@ -493,7 +525,7 @@ impl Process {
 
         // unmap all app area, for load elf again
         self.mm.unmap_app();
-        let (sp, pc) = self.mm.runtime_load_elf(elf)?;
+        let (sp, pc) = self.mm.load_elf(elf, true)?;
         let trap_ctx = TrapContext::new(pc, sp);
         let kernel_sp = self.mm.runtime_push_context(trap_ctx);
         self.ctx = SwitchContext::new_with_restore_addr(kernel_sp);
@@ -540,7 +572,7 @@ impl Process {
     pub fn load_elf(&mut self, data: &[u8]) -> Result<(), &'static str> {
         // 解析 elf 文件到 mm 中
         // 请注意，这里的 sp 是用户栈 sp，而不是 app 对应的内核栈的 app
-        let (sp, pc) = self.mm.load_elf(data)?;
+        let (sp, pc) = self.mm.load_elf(data, false)?;
 
         // 根据获取的 app pc 和 sp 创建 TrapContext
         let trap_ctx = TrapContext::new(pc, sp);
@@ -556,7 +588,7 @@ impl Process {
     pub fn runtime_load_elf(&mut self, data: &[u8]) -> Result<(), &'static str> {
         // 解析 elf 文件到 mm 中
         // 请注意，这里的 sp 是用户栈 sp，而不是 app 对应的内核栈的 app
-        let (sp, pc) = self.mm.runtime_load_elf(data)?;
+        let (sp, pc) = self.mm.load_elf(data, true)?;
 
         // 根据获取的 app pc 和 sp 创建 TrapContext
         let trap_ctx = TrapContext::new(pc, sp);
@@ -674,6 +706,14 @@ impl Process {
         }
 
         -1
+    }
+
+    pub fn mmap(&mut self, size: usize, permission: usize) -> isize {
+        if let Some(area) = self.mm.mmap(size, permission).unwrap().upgrade() {
+            return VirtAddr::from(area.lock().start_vpn).0 as isize
+        } else {
+            -1
+        }
     }
 }
 

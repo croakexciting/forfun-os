@@ -162,6 +162,10 @@ impl VirtPage {
         Self(self.0 - 1)
     }
 
+    pub fn add(&self, size: usize) -> Self {
+        Self(self.0 + size)
+    }
+
     pub fn bytes_array(&self) -> &'static mut [u8] {
         let addr: VirtAddr = (*self).into();
         unsafe {core::slice::from_raw_parts_mut(addr.0 as *mut u8, 4096)}
