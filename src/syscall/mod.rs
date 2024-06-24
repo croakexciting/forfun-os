@@ -15,14 +15,19 @@ const SYSCALL_EXIT: usize = 60;
 const SYSCALL_WAIT: usize = 61;
 const SYSCALL_KILL: usize = 62;
 const SYSCALL_SHM_OPEN: usize = 70;
+const SYSCALL_SEM_OPEN: usize = 80;
+const SYSCALL_SEM_WAIT: usize = 81;
+const SYSCALL_SEM_RAISE: usize = 82;
 
 mod file;
 mod process;
 mod mm;
+mod ipc;
 
 use file::*;
 use process::*;
 use mm::*;
+use ipc::*;
 
 pub fn syscall(id: usize, args: [usize; 3]) -> isize {
     match id {
@@ -42,6 +47,9 @@ pub fn syscall(id: usize, args: [usize; 3]) -> isize {
         SYSCALL_GETPID => sys_getpid(),
         SYSCALL_KILL => sys_kill(args[0] as usize, args[1] as usize),
         SYSCALL_SHM_OPEN => sys_shm_open(args[0] as usize, args[1], args[2]),
+        SYSCALL_SEM_OPEN => sys_sem_open(args[0] as usize),
+        SYSCALL_SEM_WAIT => sys_sem_wait(args[0] as usize),
+        SYSCALL_SEM_RAISE => sys_sem_raise(args[0] as usize),
         _ => panic!("Unsupported syscall id: {}", id),
     }
 }

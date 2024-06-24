@@ -6,7 +6,7 @@ pub mod context;
 pub mod pid;
 
 use app::*;
-use alloc::{string::String, sync::Arc};
+use alloc::sync::Arc;
 use spin::mutex::Mutex;
 
 use crate::{
@@ -106,4 +106,16 @@ pub fn mmap(size: usize, permission: usize) -> isize {
 
 pub fn shm_open(id: usize, size: usize, permission: usize) -> isize {
     TASK_MANAGER.create_or_open_shm(id, size, permission)
+}
+
+pub fn sem_open(id: usize) -> isize {
+    TASK_MANAGER.open_sem(id)
+}
+
+pub fn sem_wait(id: usize) -> isize {
+    TASK_MANAGER.wait_sem(id)
+}
+
+pub fn sem_raise(id: usize) -> isize {
+    TASK_MANAGER.raise_sem(id)
 }

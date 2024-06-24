@@ -6,6 +6,7 @@ use core::ops::{BitAnd, BitOr};
 use crate::ipc::pipe::Pipe;
 use crate::file::stdio::Stdout;
 use crate::file::File;
+use crate::ipc::semaphore::Semaphore;
 use crate::ipc::shm::Shm;
 use crate::mm::allocator::{asid_alloc, AisdHandler};
 use crate::mm::area::UserBuffer;
@@ -49,6 +50,9 @@ impl TaskManager {
         use ProcessStatus::*;
         loop {
             let mut inner = self.inner_access();
+            // check semaphore
+            inner.check_sem();
+
             let idle_ctx = inner.idle_ctx();
             // 暂时简化处理，如果获取不到当前任务，会直接 panic
             let current = inner.current_task(false).unwrap();
@@ -236,6 +240,28 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         inner.create_or_open_shm(id, size / PAGE_SIZE, permission)
     }
+
+    pub fn open_sem(&self, id: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        inner.open_sem(id)
+    }
+
+    pub fn wait_sem(&self, id: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let r = inner.wait_sem(id);
+        drop(inner);
+
+        if r == 0 {
+            self.back_to_idle();
+        }
+
+        r
+    }
+
+    pub fn raise_sem(&self, id: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        inner.raise_sem(id)
+    }
 }
 
 pub struct AppManagerInner {
@@ -248,7 +274,9 @@ pub struct AppManagerInner {
     tasks: Vec<Weak<Mutex<Process>>>,
     idle_ctx: SwitchContext,
     // name -> shm
+    // 目前简单考虑，命名 ipc 的 key 都使用数字，后面考虑支持字符串
     named_shm: BTreeMap<usize, Shm>,
+    named_sem: BTreeMap<usize, Arc<Mutex<Semaphore>>>,
 }
 
 impl AppManagerInner {
@@ -261,6 +289,7 @@ impl AppManagerInner {
             // idle process is a unstop loop process
             idle_ctx: SwitchContext::new(0, 0),
             named_shm: BTreeMap::new(),
+            named_sem: BTreeMap::new(),
         }
     }
 
@@ -434,6 +463,55 @@ impl AppManagerInner {
             let r = shm.map(&mut current_task.lock().mm);
             self.named_shm.insert(id, shm);
             r
+        }
+    }
+
+    pub fn open_sem(&mut self, id: usize) -> isize {
+        if let Some(_) = self.named_sem.get(&id) {
+            println!("[kernel] semaphore {} already exists", id);
+            return -1;
+        } else {
+            let mut sem_ptr = Arc::new(Mutex::new(Semaphore::new()));
+            self.named_sem.insert(id, sem_ptr);
+            0
+        }
+    }
+
+    pub fn wait_sem(&mut self, id: usize) -> isize {
+        let current_task = self.current_task(true).unwrap();
+        if let Some(sem) = self.named_sem.get_mut(&id) {
+            current_task.lock().set_status(ProcessStatus::WAITING);
+            sem.lock().wait(Arc::downgrade(&current_task));
+            return 0;
+        } else {
+            println!("[kernel] semaphore {} not exists", id);
+            return -1;
+        }
+    }
+
+    pub fn raise_sem(&mut self, id: usize) -> isize {
+        if let Some(sem) = self.named_sem.get_mut(&id) {
+            if let Some(proc_weak_ptr) = sem.lock().raise() {
+                if let Some(proc_ptr) = proc_weak_ptr.upgrade() {
+                    proc_ptr.lock().set_status(ProcessStatus::READY);
+                    return 0;
+                }
+            }
+            println!("[kernel] can't get process instance");
+            return -2;
+        } else {
+            println!("[kernel] semaphore {} not exists", id);
+            return -1;
+        }
+    }
+
+    pub fn check_sem(&mut self) {
+        for (k, v) in &mut self.named_sem {
+            if let Some(proc_weak_ptr) = v.lock().check() {
+                if let Some(proc_ptr) = proc_weak_ptr.upgrade() {
+                    proc_ptr.lock().set_status(ProcessStatus::READY);
+                }
+            }
         }
     }
 }
@@ -725,6 +803,7 @@ pub enum ProcessStatus {
     RUNNING(usize),
     // sleep status with start and duration timestamp(ns) 
     SLEEP(usize, usize),
+    WAITING,
     EXITED(isize),
 }
 
