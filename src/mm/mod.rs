@@ -97,6 +97,8 @@ impl MemoryManager {
             return None;
         }
 
+        self.available.0.add(pn);
+
         return Some((self.available.0, self.available.0.add(pn)));
     }
 
@@ -213,6 +215,7 @@ impl MemoryManager {
             (*trap_ctx_ptr).x[10] = 0;
         }
         parent.pt.kunmap(kernel_stack_pa.reduce(1));
+        self.available = parent.available;
     }
 
     pub fn root_ppn(&self) -> PhysPage {
