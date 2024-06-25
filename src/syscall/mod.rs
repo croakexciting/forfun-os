@@ -46,10 +46,10 @@ pub fn syscall(id: usize, args: [usize; 3]) -> isize {
         SYSCALL_PIPE => sys_create_pipe(args[0] as *mut usize),
         SYSCALL_GETPID => sys_getpid(),
         SYSCALL_KILL => sys_kill(args[0] as usize, args[1] as usize),
-        SYSCALL_SHM_OPEN => sys_shm_open(args[0] as usize, args[1], args[2]),
-        SYSCALL_SEM_OPEN => sys_sem_open(args[0] as usize),
-        SYSCALL_SEM_WAIT => sys_sem_wait(args[0] as usize),
-        SYSCALL_SEM_RAISE => sys_sem_raise(args[0] as usize),
+        SYSCALL_SHM_OPEN => sys_shm_open(args[0] as *const i8, args[1], args[2]),
+        SYSCALL_SEM_OPEN => sys_sem_open(args[0] as *const i8),
+        SYSCALL_SEM_WAIT => sys_sem_wait(args[0] as *const i8),
+        SYSCALL_SEM_RAISE => sys_sem_raise(args[0] as *const i8),
         _ => panic!("Unsupported syscall id: {}", id),
     }
 }

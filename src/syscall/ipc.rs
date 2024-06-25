@@ -1,17 +1,24 @@
-use crate::process::{sem_open, sem_raise, sem_wait, shm_open};
+use crate::{
+    arch::riscv64::str_from_user, 
+    process::{sem_open, sem_raise, sem_wait, shm_open}
+};
 
-pub fn sys_shm_open(id: usize, size: usize, permission: usize) -> isize {
-    shm_open(id, size, permission)
+pub fn sys_shm_open(name: *const i8, size: usize, permission: usize) -> isize {
+    let str = str_from_user(name);
+    shm_open(str, size, permission)
 }
 
-pub fn sys_sem_open(id: usize) -> isize {
-    sem_open(id)
+pub fn sys_sem_open(name: *const i8) -> isize {
+    let str = str_from_user(name);
+    sem_open(str)
 }
 
-pub fn sys_sem_wait(id: usize) -> isize {
-    sem_wait(id)
+pub fn sys_sem_wait(name: *const i8) -> isize {
+    let str = str_from_user(name);
+    sem_wait(str)
 }
 
-pub fn sys_sem_raise(id: usize) -> isize {
-    sem_raise(id)
+pub fn sys_sem_raise(name: *const i8) -> isize {
+    let str = str_from_user(name);
+    sem_raise(str)
 }

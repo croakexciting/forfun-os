@@ -1,6 +1,7 @@
 use core::arch::asm;
+use core::ffi::CStr;
 
-use alloc::vec::Vec;
+use alloc::{string::{String, ToString}, vec::Vec};
 
 use crate::mm::basic::VirtPage;
 
@@ -62,5 +63,14 @@ pub fn copy_usize_with_user(src: usize, dst: &mut usize) {
         riscv::register::sstatus::set_sum();
         *dst = src;
         riscv::register::sstatus::clear_sum();
+    }
+}
+
+pub fn str_from_user(src: *const i8) -> String {
+    unsafe {
+        riscv::register::sstatus::set_sum();
+        let str = CStr::from_ptr(src).to_str().unwrap().to_string().clone();
+        riscv::register::sstatus::clear_sum();
+        str
     }
 }

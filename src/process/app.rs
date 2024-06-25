@@ -235,20 +235,20 @@ impl TaskManager {
         inner.mmap(size, permission)
     }
 
-    pub fn create_or_open_shm(&self, id: usize, size: usize, permission: usize) -> isize {
+    pub fn create_or_open_shm(&self, name: String, size: usize, permission: usize) -> isize {
         assert_eq!(size % PAGE_SIZE, 0);
         let mut inner = self.inner.exclusive_access();
-        inner.create_or_open_shm(id, size / PAGE_SIZE, permission)
+        inner.create_or_open_shm(name, size / PAGE_SIZE, permission)
     }
 
-    pub fn open_sem(&self, id: usize) -> isize {
+    pub fn open_sem(&self, name: String) -> isize {
         let mut inner = self.inner.exclusive_access();
-        inner.open_sem(id)
+        inner.open_sem(name)
     }
 
-    pub fn wait_sem(&self, id: usize) -> isize {
+    pub fn wait_sem(&self, name: String) -> isize {
         let mut inner = self.inner.exclusive_access();
-        let r = inner.wait_sem(id);
+        let r = inner.wait_sem(name);
         drop(inner);
 
         if r == 0 {
@@ -258,9 +258,9 @@ impl TaskManager {
         r
     }
 
-    pub fn raise_sem(&self, id: usize) -> isize {
+    pub fn raise_sem(&self, name: String) -> isize {
         let mut inner = self.inner.exclusive_access();
-        inner.raise_sem(id)
+        inner.raise_sem(name)
     }
 }
 
@@ -275,8 +275,8 @@ pub struct AppManagerInner {
     idle_ctx: SwitchContext,
     // name -> shm
     // 目前简单考虑，命名 ipc 的 key 都使用数字，后面考虑支持字符串
-    named_shm: BTreeMap<usize, Shm>,
-    named_sem: BTreeMap<usize, Arc<Mutex<Semaphore>>>,
+    named_shm: BTreeMap<String, Shm>,
+    named_sem: BTreeMap<String, Arc<Mutex<Semaphore>>>,
 }
 
 impl AppManagerInner {
@@ -452,25 +452,25 @@ impl AppManagerInner {
         self.current_task(true).unwrap().lock().mmap(size, permission)
     }
 
-    pub fn create_or_open_shm(&mut self, id: usize, pn: usize, permission: usize) -> isize {
+    pub fn create_or_open_shm(&mut self, name: String, pn: usize, permission: usize) -> isize {
         let current_task = self.current_task(true).unwrap();
         let pid = current_task.lock().pid.0;
-        if let Some(shm) = self.named_shm.get_mut(&id) {
+        if let Some(shm) = self.named_shm.get_mut(&name) {
             // map with process memory manager
             shm.map(pid, &mut current_task.lock().mm)
         } else {
             // create a shm
             let mut shm = Shm::new(pn, permission);
             let r = shm.map(pid, &mut current_task.lock().mm);
-            self.named_shm.insert(id, shm);
+            self.named_shm.insert(name, shm);
             r
         }
     }
 
-    pub fn close_shm(&mut self, addr: usize, id: usize) -> isize {
+    pub fn close_shm(&mut self, addr: usize, name: String) -> isize {
         let current_task = self.current_task(true).unwrap();
         let pid = current_task.lock().pid.0;
-        if let Some(shm) = self.named_shm.get_mut(&id) {
+        if let Some(shm) = self.named_shm.get_mut(&name) {
             // map with process memory manager
             let start_vpn: VirtPage = VirtAddr::from(addr).into();
             shm.unmap(pid, start_vpn, &mut current_task.lock().mm);
@@ -481,13 +481,13 @@ impl AppManagerInner {
         }
     }
 
-    pub fn remove_shm(&mut self, id: usize) -> isize {
-        if let Some(shm) = self.named_shm.get_mut(&id) {
+    pub fn remove_shm(&mut self, name: String) -> isize {
+        if let Some(shm) = self.named_shm.get_mut(&name) {
             if shm.users.len() > 0 {
-                println!("[kernel] Shm {} still in used, can't remove", id);
+                println!("[kernel] Shm {} still in used, can't remove", name.as_str());
                 -2
             } else {
-                self.named_sem.remove(&id);
+                self.named_shm.remove(&name);
                 0
             }
         } else {
@@ -496,31 +496,31 @@ impl AppManagerInner {
         }
     }
 
-    pub fn open_sem(&mut self, id: usize) -> isize {
-        if let Some(_) = self.named_sem.get(&id) {
-            println!("[kernel] semaphore {} already exists", id);
+    pub fn open_sem(&mut self, name: String) -> isize {
+        if let Some(_) = self.named_sem.get(&name) {
+            println!("[kernel] semaphore {} already exists", name.as_str());
             return -1;
         } else {
             let mut sem_ptr = Arc::new(Mutex::new(Semaphore::new()));
-            self.named_sem.insert(id, sem_ptr);
+            self.named_sem.insert(name, sem_ptr);
             0
         }
     }
 
-    pub fn wait_sem(&mut self, id: usize) -> isize {
+    pub fn wait_sem(&mut self, name: String) -> isize {
         let current_task = self.current_task(true).unwrap();
-        if let Some(sem) = self.named_sem.get_mut(&id) {
+        if let Some(sem) = self.named_sem.get_mut(&name) {
             current_task.lock().set_status(ProcessStatus::WAITING);
             sem.lock().wait(Arc::downgrade(&current_task));
             return 0;
         } else {
-            println!("[kernel] semaphore {} not exists", id);
+            println!("[kernel] semaphore {} not exists", name.as_str());
             return -1;
         }
     }
 
-    pub fn raise_sem(&mut self, id: usize) -> isize {
-        if let Some(sem) = self.named_sem.get_mut(&id) {
+    pub fn raise_sem(&mut self, name: String) -> isize {
+        if let Some(sem) = self.named_sem.get_mut(&name) {
             if let Some(proc_weak_ptr) = sem.lock().raise() {
                 if let Some(proc_ptr) = proc_weak_ptr.upgrade() {
                     proc_ptr.lock().set_status(ProcessStatus::READY);
@@ -530,7 +530,7 @@ impl AppManagerInner {
             println!("[kernel] can't get process instance");
             return -2;
         } else {
-            println!("[kernel] semaphore {} not exists", id);
+            println!("[kernel] semaphore {} not exists", name.as_str());
             return -1;
         }
     }
