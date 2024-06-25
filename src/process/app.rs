@@ -454,15 +454,45 @@ impl AppManagerInner {
 
     pub fn create_or_open_shm(&mut self, id: usize, pn: usize, permission: usize) -> isize {
         let current_task = self.current_task(true).unwrap();
+        let pid = current_task.lock().pid.0;
         if let Some(shm) = self.named_shm.get_mut(&id) {
             // map with process memory manager
-            shm.map(&mut current_task.lock().mm)
+            shm.map(pid, &mut current_task.lock().mm)
         } else {
             // create a shm
             let mut shm = Shm::new(pn, permission);
-            let r = shm.map(&mut current_task.lock().mm);
+            let r = shm.map(pid, &mut current_task.lock().mm);
             self.named_shm.insert(id, shm);
             r
+        }
+    }
+
+    pub fn close_shm(&mut self, addr: usize, id: usize) -> isize {
+        let current_task = self.current_task(true).unwrap();
+        let pid = current_task.lock().pid.0;
+        if let Some(shm) = self.named_shm.get_mut(&id) {
+            // map with process memory manager
+            let start_vpn: VirtPage = VirtAddr::from(addr).into();
+            shm.unmap(pid, start_vpn, &mut current_task.lock().mm);
+            0
+        } else {
+            println!("[kernel] This shm is not exist");
+            -1
+        }
+    }
+
+    pub fn remove_shm(&mut self, id: usize) -> isize {
+        if let Some(shm) = self.named_shm.get_mut(&id) {
+            if shm.users.len() > 0 {
+                println!("[kernel] Shm {} still in used, can't remove", id);
+                -2
+            } else {
+                self.named_sem.remove(&id);
+                0
+            }
+        } else {
+            println!("[kernel] This shm is not exist");
+            -1
         }
     }
 

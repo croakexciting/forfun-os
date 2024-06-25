@@ -101,6 +101,14 @@ impl MemoryManager {
         }
     }
 
+    fn dealloc(&mut self, area: &Arc<Mutex<MapArea>>) {
+        let vpn = area.lock().start_vpn;
+        let pn = area.lock().end_vpn.0 - area.lock().start_vpn.0;
+        if let Some(allocator) = &mut self.buddy_alloctor {
+            allocator.dealloc(vpn, pn)
+        }
+    }
+
     // return kernel stack pointer
     pub fn push_context(&mut self, ctx: TrapContext) -> usize {
         let sp_pa = self.pt.find_pte(self.kernel_stack_area.end_vpn.prev()).unwrap().ppn().next();
@@ -260,6 +268,18 @@ impl MemoryManager {
         Some(weak_ptr)
     }
 
+    pub fn umap_dyn_area(&mut self, start_vpn: VirtPage) -> isize {
+        if let Some(index) = self.app_areas.iter().position(|a| a.lock().start_vpn == start_vpn) {
+            let area  = self.app_areas.remove(index);
+            self.dealloc(&area);
+            return 0;
+        }
+
+        // not find
+        println!("[kernel] can't find map area start with {:#x}", start_vpn.0);
+        -1
+    }
+
     pub fn map_defined(&mut self, ppns: &Vec<PhysPage>, permission: Permission) -> isize {
         if let Some(vpns) = self.alloc(ppns.len()) {
             let mut new_area = MapArea::new(
@@ -269,6 +289,8 @@ impl MemoryManager {
                 permission.clone()
             );
             new_area.map_defined(&mut self.pt, ppns);
+            let area_ptr = Arc::new(Mutex::new(new_area));
+            self.app_areas.push(area_ptr);
             VirtAddr::from(vpns.0).0 as isize
         } else {
             -1

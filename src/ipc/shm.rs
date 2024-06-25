@@ -4,11 +4,13 @@ use alloc::vec::Vec;
 use crate::mm::{
     allocator::{frame_alloc, PhysFrame}, 
     area::Permission, 
-    basic::PhysPage, 
+    basic::{PhysPage, VirtPage}, 
     MemoryManager
 };
 
 pub struct Shm {
+    pub users: Vec<usize>,
+
     _frames: Vec<PhysFrame>,
     ppns: Vec<PhysPage>,
     permission: Permission,
@@ -26,10 +28,20 @@ impl Shm {
             _frames.push(frame);
         }
 
-        Self { _frames, ppns, permission: p }
+        Self { users: Vec::new(), _frames, ppns, permission: p }
     }
 
-    pub fn map(&mut self, mm: &mut MemoryManager) -> isize {
+    pub fn map(&mut self, pid: usize, mm: &mut MemoryManager) -> isize {
+        self.users.push(pid);
         mm.map_defined(self.ppns.borrow(), self.permission)
+    }
+
+    pub fn unmap(&mut self, pid: usize, start_vpn: VirtPage, mm: &mut MemoryManager) -> isize {
+        if let Some(index) = self.users.iter().position(|p| *p == pid) {
+            self.users.remove(index);
+            mm.umap_dyn_area(start_vpn)
+        } else {
+            -1
+        }
     }
 }
