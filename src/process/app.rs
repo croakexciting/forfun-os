@@ -3,6 +3,7 @@ use core::cell::RefMut;
 use core::arch::asm;
 use core::ops::{BitAnd, BitOr};
 
+use crate::ipc::server::Server;
 use crate::ipc::pipe::Pipe;
 use crate::file::stdio::Stdout;
 use crate::file::File;
@@ -277,6 +278,7 @@ pub struct AppManagerInner {
     // 目前简单考虑，命名 ipc 的 key 都使用数字，后面考虑支持字符串
     named_shm: BTreeMap<String, Shm>,
     named_sem: BTreeMap<String, Arc<Mutex<Semaphore>>>,
+    named_srv: BTreeMap<String, Arc<Mutex<Server>>>,
 }
 
 impl AppManagerInner {
@@ -290,6 +292,7 @@ impl AppManagerInner {
             idle_ctx: SwitchContext::new(0, 0),
             named_shm: BTreeMap::new(),
             named_sem: BTreeMap::new(),
+            named_srv: BTreeMap::new(),
         }
     }
 
@@ -543,6 +546,10 @@ impl AppManagerInner {
                 }
             }
         }
+    }
+
+    pub fn create_server(&mut self, name: String) -> isize {
+
     }
 }
 
