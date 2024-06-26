@@ -3,7 +3,8 @@ use core::cell::RefMut;
 use core::arch::asm;
 use core::ops::{BitAnd, BitOr};
 
-use crate::ipc::server::Server;
+use crate::ipc::id::RcvidHandler;
+use crate::ipc::server::{Msg, Server};
 use crate::ipc::pipe::Pipe;
 use crate::file::stdio::Stdout;
 use crate::file::File;
@@ -263,6 +264,57 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         inner.raise_sem(name)
     }
+
+    pub fn create_server(&self, name: String) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        inner.create_server(name)
+    }
+
+    // return coid
+    pub fn connect_server(&self, name: String) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        inner.connect_server(name)
+    }
+
+    pub fn request(&self, coid: usize, data: Arc<Vec<u8>>) -> Option<Arc<Vec<u8>>> {
+        let mut inner = self.inner.exclusive_access();
+        let rcvid = inner.send_request(coid, data);
+        if rcvid < 0 {
+            return None;
+        }
+        drop(inner);
+
+        loop {
+            let mut inner = self.inner.exclusive_access();
+            // waiting for response
+            if let Some(msg) = inner.recv_response(rcvid as usize) {
+                if msg.rcvid() == rcvid as usize {
+                    return Some(msg.data())
+                }
+            } else {
+                // back to idle
+                drop(inner);
+                self.back_to_idle();
+            }
+        }
+    }
+
+    pub fn recv_request(&self, name: String) -> Option<(usize, Arc<Vec<u8>>)> {
+        loop {
+            let mut inner = self.inner.exclusive_access();
+            if let Some(msg) = inner.recv_request(name.to_owned()) {
+                return Some((msg.rcvid(), msg.data()));
+            } else {
+                drop(inner);
+                self.back_to_idle();
+            }
+        }
+    }
+
+    pub fn reply_request(&self, rcvid: usize, data: Arc<Vec<u8>>) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        inner.send_response(rcvid, data)
+    }
 }
 
 pub struct AppManagerInner {
@@ -279,6 +331,8 @@ pub struct AppManagerInner {
     named_shm: BTreeMap<String, Shm>,
     named_sem: BTreeMap<String, Arc<Mutex<Semaphore>>>,
     named_srv: BTreeMap<String, Arc<Mutex<Server>>>,
+    srv_conn: BTreeMap<usize, Weak<Mutex<Server>>>,
+    session: BTreeMap<usize, Weak<Mutex<Server>>>,
 }
 
 impl AppManagerInner {
@@ -293,6 +347,8 @@ impl AppManagerInner {
             named_shm: BTreeMap::new(),
             named_sem: BTreeMap::new(),
             named_srv: BTreeMap::new(),
+            srv_conn: BTreeMap::new(),
+            session: BTreeMap::new(),
         }
     }
 
@@ -548,8 +604,75 @@ impl AppManagerInner {
         }
     }
 
+    // 感觉 server 这个 ipc 的功能，我设计的非常烂
+    // 我觉得 coid 和 rcvid 是不是要合并起来
     pub fn create_server(&mut self, name: String) -> isize {
+        if let Some(_) = self.named_srv.get(&name) {
+            println!("[kernel] server {} already exists", name.as_str());
+            return -1;
+        } else {
+            let proc: Weak<Mutex<Process>> = Arc::downgrade(&self.current_task(true).unwrap());
+            let srv: Arc<Mutex<Server>> = Arc::new(Mutex::new(Server::new()));
+            self.named_srv.insert(name, srv);
+            0
+        }
+    }
 
+    pub fn connect_server(&mut self, name: String) -> isize {
+        if let Some(srv) = self.named_srv.get(&name) {
+            if let Some(coid) = srv.lock().connect() {
+                self.srv_conn.insert(coid, Arc::downgrade(srv));
+                return coid as isize;
+            } else {
+                return -1;
+            }
+        } else {
+            return -2;
+        }
+    }
+
+    pub fn send_request(&mut self, coid: usize, data: Arc<Vec<u8>>) -> isize {
+        // send
+        if let Some(srv_weak) = self.srv_conn.get_mut(&coid) {
+            if let Some(srv) = srv_weak.upgrade() {
+                if let Some(rcvid) = srv.lock().send_request(coid, data) {
+                    self.session.insert(rcvid, Arc::downgrade(&srv));
+                    return rcvid as isize;
+                }
+            }
+        }
+
+        -1
+    }
+
+    pub fn recv_request(&mut self, name: String) -> Option<Arc<Msg>> {
+        if let Some(srv) = self.named_srv.get(&name) {
+            let msg = srv.lock().recv_request()?;
+            let rcvid = msg.rcvid();
+            Some(msg)
+        } else {
+            None
+        }
+    }
+
+    pub fn send_response(&mut self, rcvid: usize, data: Arc<Vec<u8>>) -> isize {
+        if let Some(srv_weak) = self.session.get(&rcvid) {
+            if let Some(srv) = srv_weak.upgrade() {
+                srv.lock().send_response(rcvid, data);
+                0
+            } else {
+                -1
+            }
+        } else {
+            -2
+        }
+    }
+
+    pub fn recv_response(&mut self, rcvid: usize) -> Option<Arc<Msg>> {
+        let srv = self.session.get(&rcvid)?.upgrade()?;
+        let msg = srv.lock().recv_response(rcvid)?;
+        self.session.remove(&rcvid);
+        Some(msg)
     }
 }
 

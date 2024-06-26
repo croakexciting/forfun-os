@@ -30,10 +30,12 @@ impl IdAllocator {
 
     // 按照顺序
     pub fn alloc(&mut self) -> Option<usize> {
-        if let Some(id) = self.recycled.pop() {
-            Some(id)
-        } else if self.current == self.end {
-            None
+        if self.current == self.end {
+            if let Some(id) = self.recycled.pop() {
+                Some(id)
+            } else {
+                None
+            }
         } else {
             self.current += 1;
             Some(self.current - 1)
@@ -44,7 +46,7 @@ impl IdAllocator {
     pub fn dealloc(&mut self, id: usize) {
         if id >= self.current || self.recycled.iter().any(|&v| v == id) {
             // 既不在 recycled 中，也不在未分配的内存范围中
-            panic!("id={} has not been allocated!", id);
+            // do nothing
         }
 
         self.recycled.push(id);
@@ -53,6 +55,12 @@ impl IdAllocator {
 
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct RcvidHandler(pub usize);
+
+impl RcvidHandler {
+    pub fn new_with_rcvid(rcvid: usize) -> Self {
+        Self(rcvid)
+    }
+}
 
 impl Drop for RcvidHandler {
     fn drop(&mut self) {

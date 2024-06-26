@@ -6,7 +6,7 @@ pub mod context;
 pub mod pid;
 
 use app::*;
-use alloc::{string::String, sync::Arc};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use spin::mutex::Mutex;
 
 use crate::{
@@ -118,4 +118,24 @@ pub fn sem_wait(name: String) -> isize {
 
 pub fn sem_raise(name: String) -> isize {
     TASK_MANAGER.raise_sem(name)
+}
+
+pub fn create_server(name: String) -> isize {
+    TASK_MANAGER.create_server(name)
+}
+
+pub fn connect_server(name: String) -> isize {
+    TASK_MANAGER.connect_server(name)
+}
+
+pub fn request(coid: usize, data: Arc<Vec<u8>>) -> Option<Arc<Vec<u8>>> {
+    TASK_MANAGER.request(coid, data)
+}
+
+pub fn recv_request(name: String) -> Option<(usize, Arc<Vec<u8>>)> {
+    TASK_MANAGER.recv_request(name)
+}
+
+pub fn reply_request(rcvid: usize, data: Arc<Vec<u8>>) -> isize {
+    TASK_MANAGER.reply_request(rcvid, data)
 }

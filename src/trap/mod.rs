@@ -52,7 +52,7 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
         // 是否被打断是由 sie 位控制的。中断嵌套功能后续实现，想到的方法应该是使用中断向量表，区分 trap 和 interrupt
         Trap::Exception(Exception::UserEnvCall) => {
             ctx.sepc += 4;
-            ctx.x[10] = syscall(ctx.x[17], [ctx.x[10], ctx.x[11], ctx.x[12]]) as usize;
+            ctx.x[10] = syscall(ctx.x[17], [ctx.x[10], ctx.x[11], ctx.x[12], ctx.x[13]]) as usize;
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             set_trigger();

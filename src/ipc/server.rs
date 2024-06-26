@@ -1,24 +1,20 @@
 // Server 是一对多，而且同步的，主要用于 request data 的场景
 
 use alloc::collections::BTreeMap;
-use alloc::rc::Rc;
 use alloc::vec::Vec;
-use alloc::sync::{Weak, Arc};
-use spin::mutex::Mutex;
-use crate::process::app::Process;
+use alloc::sync::Arc;
 
 use super::id::{coid_alloc, rcvid_alloc, CoidHandler, RcvidHandler};
 
 pub struct Server {
-    proc: Weak<Mutex<Process>>,
     conn: Vec<CoidHandler>,
     request: Vec<Arc<Msg>>,
     response: BTreeMap<usize, Arc<Msg>>,
 }
 
 impl Server {
-    pub fn new(proc: Weak<Mutex<Process>>) -> Self {
-        Self { proc, conn: Vec::new(), request: Vec::new(), response: BTreeMap::new() }
+    pub fn new() -> Self {
+        Self { conn: Vec::new(), request: Vec::new(), response: BTreeMap::new() }
     }
 
     pub fn connect(&mut self) -> Option<usize> {
@@ -44,26 +40,33 @@ impl Server {
         self.response.remove(&rcvid)
     }
 
-    pub fn send_response(&mut self, rcvid: Arc<RcvidHandler>, data: Arc<Vec<u8>>) {
-        let id = rcvid.0;
-        let msg = Arc::new(Msg::new_with_rcvid(rcvid, data));
-        self.response.insert(id, msg);
+    pub fn send_response(&mut self, rcvid: usize, data: Arc<Vec<u8>>) {
+        let msg = Arc::new(Msg::new_with_rcvid(RcvidHandler::new_with_rcvid(rcvid), data));
+        self.response.insert(rcvid, msg);
     }
 }
 
 pub struct Msg {
-    rcvid: Arc<RcvidHandler>,
-    coid: usize,
+    rcvid: RcvidHandler,
+    _coid: usize,
     data: Arc<Vec<u8>>,
 }
 
 impl Msg {
     pub fn new(coid: usize, data: Arc<Vec<u8>>) -> Option<Self> {
-        let rcvid = Arc::new(rcvid_alloc()?);
-        Some(Self { rcvid, coid, data })
+        let rcvid = rcvid_alloc()?;
+        Some(Self { rcvid, _coid: coid, data })
     }
 
-    pub fn new_with_rcvid(rcvid: Arc<RcvidHandler>, data: Arc<Vec<u8>>) -> Self {
-        Self { rcvid, coid: 0, data }
+    pub fn new_with_rcvid(rcvid: RcvidHandler, data: Arc<Vec<u8>>) -> Self {
+        Self { rcvid, _coid: 0, data }
+    }
+
+    pub fn rcvid(&self) -> usize {
+        self.rcvid.0
+    }
+
+    pub fn data(&self) -> Arc<Vec<u8>> {
+        self.data.clone()
     }
 }
