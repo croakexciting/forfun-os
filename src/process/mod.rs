@@ -6,7 +6,7 @@ pub mod context;
 pub mod pid;
 
 use app::*;
-use alloc::sync::Arc;
+use alloc::{string::String, sync::Arc, vec::Vec};
 use spin::mutex::Mutex;
 
 use crate::{
@@ -104,18 +104,38 @@ pub fn mmap(size: usize, permission: usize) -> isize {
     TASK_MANAGER.mmap(size, permission)
 }
 
-pub fn shm_open(id: usize, size: usize, permission: usize) -> isize {
-    TASK_MANAGER.create_or_open_shm(id, size, permission)
+pub fn shm_open(name: String, size: usize, permission: usize) -> isize {
+    TASK_MANAGER.create_or_open_shm(name, size, permission)
 }
 
-pub fn sem_open(id: usize) -> isize {
-    TASK_MANAGER.open_sem(id)
+pub fn sem_open(name: String) -> isize {
+    TASK_MANAGER.open_sem(name)
 }
 
-pub fn sem_wait(id: usize) -> isize {
-    TASK_MANAGER.wait_sem(id)
+pub fn sem_wait(name: String) -> isize {
+    TASK_MANAGER.wait_sem(name)
 }
 
-pub fn sem_raise(id: usize) -> isize {
-    TASK_MANAGER.raise_sem(id)
+pub fn sem_raise(name: String) -> isize {
+    TASK_MANAGER.raise_sem(name)
+}
+
+pub fn create_server(name: String) -> isize {
+    TASK_MANAGER.create_server(name)
+}
+
+pub fn connect_server(name: String) -> isize {
+    TASK_MANAGER.connect_server(name)
+}
+
+pub fn request(coid: usize, data: Arc<Vec<u8>>) -> Option<Arc<Vec<u8>>> {
+    TASK_MANAGER.request(coid, data)
+}
+
+pub fn recv_request(name: String) -> Option<(usize, Arc<Vec<u8>>)> {
+    TASK_MANAGER.recv_request(name)
+}
+
+pub fn reply_request(rcvid: usize, data: Arc<Vec<u8>>) -> isize {
+    TASK_MANAGER.reply_request(rcvid, data)
 }

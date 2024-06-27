@@ -18,6 +18,11 @@ const SYSCALL_SHM_OPEN: usize = 70;
 const SYSCALL_SEM_OPEN: usize = 80;
 const SYSCALL_SEM_WAIT: usize = 81;
 const SYSCALL_SEM_RAISE: usize = 82;
+const SYSCALL_SRV_CREATE: usize = 90;
+const SYSCALL_SRV_CONNECT: usize = 91;
+const SYSCALL_SRV_REQUEST: usize = 92;
+const SYSCALL_SRV_RECV: usize = 93;
+const SYSCALL_SRV_REPLY: usize = 94;
 
 mod file;
 mod process;
@@ -29,7 +34,7 @@ use process::*;
 use mm::*;
 use ipc::*;
 
-pub fn syscall(id: usize, args: [usize; 3]) -> isize {
+pub fn syscall(id: usize, args: [usize; 4]) -> isize {
     match id {
         SYSCALL_READ => sys_read(args[0], args[1] as *mut u8, args[2]),
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
@@ -46,10 +51,15 @@ pub fn syscall(id: usize, args: [usize; 3]) -> isize {
         SYSCALL_PIPE => sys_create_pipe(args[0] as *mut usize),
         SYSCALL_GETPID => sys_getpid(),
         SYSCALL_KILL => sys_kill(args[0] as usize, args[1] as usize),
-        SYSCALL_SHM_OPEN => sys_shm_open(args[0] as usize, args[1], args[2]),
-        SYSCALL_SEM_OPEN => sys_sem_open(args[0] as usize),
-        SYSCALL_SEM_WAIT => sys_sem_wait(args[0] as usize),
-        SYSCALL_SEM_RAISE => sys_sem_raise(args[0] as usize),
+        SYSCALL_SHM_OPEN => sys_shm_open(args[0] as *const i8, args[1], args[2]),
+        SYSCALL_SEM_OPEN => sys_sem_open(args[0] as *const i8),
+        SYSCALL_SEM_WAIT => sys_sem_wait(args[0] as *const i8),
+        SYSCALL_SEM_RAISE => sys_sem_raise(args[0] as *const i8),
+        SYSCALL_SRV_CREATE => sys_create_server(args[0] as *const i8),
+        SYSCALL_SRV_CONNECT => sys_connect_server(args[0] as *const i8),
+        SYSCALL_SRV_REQUEST => sys_request(args[0], args[1] as *const u8, args[2], args[3] as *mut u8),
+        SYSCALL_SRV_RECV => sys_recv_request(args[0] as *const i8, args[1] as *mut u8, args[2] as *mut usize),
+        SYSCALL_SRV_REPLY => sys_replay_request(args[0], args[1] as *const u8, args[2]),
         _ => panic!("Unsupported syscall id: {}", id),
     }
 }

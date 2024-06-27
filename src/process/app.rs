@@ -3,6 +3,8 @@ use core::cell::RefMut;
 use core::arch::asm;
 use core::ops::{BitAnd, BitOr};
 
+use crate::ipc::id::RcvidHandler;
+use crate::ipc::server::{Msg, Server};
 use crate::ipc::pipe::Pipe;
 use crate::file::stdio::Stdout;
 use crate::file::File;
@@ -235,20 +237,20 @@ impl TaskManager {
         inner.mmap(size, permission)
     }
 
-    pub fn create_or_open_shm(&self, id: usize, size: usize, permission: usize) -> isize {
+    pub fn create_or_open_shm(&self, name: String, size: usize, permission: usize) -> isize {
         assert_eq!(size % PAGE_SIZE, 0);
         let mut inner = self.inner.exclusive_access();
-        inner.create_or_open_shm(id, size / PAGE_SIZE, permission)
+        inner.create_or_open_shm(name, size / PAGE_SIZE, permission)
     }
 
-    pub fn open_sem(&self, id: usize) -> isize {
+    pub fn open_sem(&self, name: String) -> isize {
         let mut inner = self.inner.exclusive_access();
-        inner.open_sem(id)
+        inner.open_sem(name)
     }
 
-    pub fn wait_sem(&self, id: usize) -> isize {
+    pub fn wait_sem(&self, name: String) -> isize {
         let mut inner = self.inner.exclusive_access();
-        let r = inner.wait_sem(id);
+        let r = inner.wait_sem(name);
         drop(inner);
 
         if r == 0 {
@@ -258,9 +260,60 @@ impl TaskManager {
         r
     }
 
-    pub fn raise_sem(&self, id: usize) -> isize {
+    pub fn raise_sem(&self, name: String) -> isize {
         let mut inner = self.inner.exclusive_access();
-        inner.raise_sem(id)
+        inner.raise_sem(name)
+    }
+
+    pub fn create_server(&self, name: String) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        inner.create_server(name)
+    }
+
+    // return coid
+    pub fn connect_server(&self, name: String) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        inner.connect_server(name)
+    }
+
+    pub fn request(&self, coid: usize, data: Arc<Vec<u8>>) -> Option<Arc<Vec<u8>>> {
+        let mut inner = self.inner.exclusive_access();
+        let rcvid = inner.send_request(coid, data);
+        if rcvid < 0 {
+            return None;
+        }
+        drop(inner);
+
+        loop {
+            let mut inner = self.inner.exclusive_access();
+            // waiting for response
+            if let Some(msg) = inner.recv_response(rcvid as usize) {
+                if msg.rcvid() == rcvid as usize {
+                    return Some(msg.data())
+                }
+            } else {
+                // back to idle
+                drop(inner);
+                self.back_to_idle();
+            }
+        }
+    }
+
+    pub fn recv_request(&self, name: String) -> Option<(usize, Arc<Vec<u8>>)> {
+        loop {
+            let mut inner = self.inner.exclusive_access();
+            if let Some(msg) = inner.recv_request(name.to_owned()) {
+                return Some((msg.rcvid(), msg.data()));
+            } else {
+                drop(inner);
+                self.back_to_idle();
+            }
+        }
+    }
+
+    pub fn reply_request(&self, rcvid: usize, data: Arc<Vec<u8>>) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        inner.send_response(rcvid, data)
     }
 }
 
@@ -275,8 +328,11 @@ pub struct AppManagerInner {
     idle_ctx: SwitchContext,
     // name -> shm
     // 目前简单考虑，命名 ipc 的 key 都使用数字，后面考虑支持字符串
-    named_shm: BTreeMap<usize, Shm>,
-    named_sem: BTreeMap<usize, Arc<Mutex<Semaphore>>>,
+    named_shm: BTreeMap<String, Shm>,
+    named_sem: BTreeMap<String, Arc<Mutex<Semaphore>>>,
+    named_srv: BTreeMap<String, Arc<Mutex<Server>>>,
+    srv_conn: BTreeMap<usize, Weak<Mutex<Server>>>,
+    session: BTreeMap<usize, Weak<Mutex<Server>>>,
 }
 
 impl AppManagerInner {
@@ -290,6 +346,9 @@ impl AppManagerInner {
             idle_ctx: SwitchContext::new(0, 0),
             named_shm: BTreeMap::new(),
             named_sem: BTreeMap::new(),
+            named_srv: BTreeMap::new(),
+            srv_conn: BTreeMap::new(),
+            session: BTreeMap::new(),
         }
     }
 
@@ -452,25 +511,25 @@ impl AppManagerInner {
         self.current_task(true).unwrap().lock().mmap(size, permission)
     }
 
-    pub fn create_or_open_shm(&mut self, id: usize, pn: usize, permission: usize) -> isize {
+    pub fn create_or_open_shm(&mut self, name: String, pn: usize, permission: usize) -> isize {
         let current_task = self.current_task(true).unwrap();
         let pid = current_task.lock().pid.0;
-        if let Some(shm) = self.named_shm.get_mut(&id) {
+        if let Some(shm) = self.named_shm.get_mut(&name) {
             // map with process memory manager
             shm.map(pid, &mut current_task.lock().mm)
         } else {
             // create a shm
             let mut shm = Shm::new(pn, permission);
             let r = shm.map(pid, &mut current_task.lock().mm);
-            self.named_shm.insert(id, shm);
+            self.named_shm.insert(name, shm);
             r
         }
     }
 
-    pub fn close_shm(&mut self, addr: usize, id: usize) -> isize {
+    pub fn close_shm(&mut self, addr: usize, name: String) -> isize {
         let current_task = self.current_task(true).unwrap();
         let pid = current_task.lock().pid.0;
-        if let Some(shm) = self.named_shm.get_mut(&id) {
+        if let Some(shm) = self.named_shm.get_mut(&name) {
             // map with process memory manager
             let start_vpn: VirtPage = VirtAddr::from(addr).into();
             shm.unmap(pid, start_vpn, &mut current_task.lock().mm);
@@ -481,13 +540,13 @@ impl AppManagerInner {
         }
     }
 
-    pub fn remove_shm(&mut self, id: usize) -> isize {
-        if let Some(shm) = self.named_shm.get_mut(&id) {
+    pub fn remove_shm(&mut self, name: String) -> isize {
+        if let Some(shm) = self.named_shm.get_mut(&name) {
             if shm.users.len() > 0 {
-                println!("[kernel] Shm {} still in used, can't remove", id);
+                println!("[kernel] Shm {} still in used, can't remove", name.as_str());
                 -2
             } else {
-                self.named_sem.remove(&id);
+                self.named_shm.remove(&name);
                 0
             }
         } else {
@@ -496,31 +555,31 @@ impl AppManagerInner {
         }
     }
 
-    pub fn open_sem(&mut self, id: usize) -> isize {
-        if let Some(_) = self.named_sem.get(&id) {
-            println!("[kernel] semaphore {} already exists", id);
+    pub fn open_sem(&mut self, name: String) -> isize {
+        if let Some(_) = self.named_sem.get(&name) {
+            println!("[kernel] semaphore {} already exists", name.as_str());
             return -1;
         } else {
             let mut sem_ptr = Arc::new(Mutex::new(Semaphore::new()));
-            self.named_sem.insert(id, sem_ptr);
+            self.named_sem.insert(name, sem_ptr);
             0
         }
     }
 
-    pub fn wait_sem(&mut self, id: usize) -> isize {
+    pub fn wait_sem(&mut self, name: String) -> isize {
         let current_task = self.current_task(true).unwrap();
-        if let Some(sem) = self.named_sem.get_mut(&id) {
+        if let Some(sem) = self.named_sem.get_mut(&name) {
             current_task.lock().set_status(ProcessStatus::WAITING);
             sem.lock().wait(Arc::downgrade(&current_task));
             return 0;
         } else {
-            println!("[kernel] semaphore {} not exists", id);
+            println!("[kernel] semaphore {} not exists", name.as_str());
             return -1;
         }
     }
 
-    pub fn raise_sem(&mut self, id: usize) -> isize {
-        if let Some(sem) = self.named_sem.get_mut(&id) {
+    pub fn raise_sem(&mut self, name: String) -> isize {
+        if let Some(sem) = self.named_sem.get_mut(&name) {
             if let Some(proc_weak_ptr) = sem.lock().raise() {
                 if let Some(proc_ptr) = proc_weak_ptr.upgrade() {
                     proc_ptr.lock().set_status(ProcessStatus::READY);
@@ -530,7 +589,7 @@ impl AppManagerInner {
             println!("[kernel] can't get process instance");
             return -2;
         } else {
-            println!("[kernel] semaphore {} not exists", id);
+            println!("[kernel] semaphore {} not exists", name.as_str());
             return -1;
         }
     }
@@ -543,6 +602,77 @@ impl AppManagerInner {
                 }
             }
         }
+    }
+
+    // 感觉 server 这个 ipc 的功能，我设计的非常烂
+    // 我觉得 coid 和 rcvid 是不是要合并起来
+    pub fn create_server(&mut self, name: String) -> isize {
+        if let Some(_) = self.named_srv.get(&name) {
+            println!("[kernel] server {} already exists", name.as_str());
+            return -1;
+        } else {
+            let proc: Weak<Mutex<Process>> = Arc::downgrade(&self.current_task(true).unwrap());
+            let srv: Arc<Mutex<Server>> = Arc::new(Mutex::new(Server::new()));
+            self.named_srv.insert(name, srv);
+            0
+        }
+    }
+
+    pub fn connect_server(&mut self, name: String) -> isize {
+        if let Some(srv) = self.named_srv.get(&name) {
+            if let Some(coid) = srv.lock().connect() {
+                self.srv_conn.insert(coid, Arc::downgrade(srv));
+                return coid as isize;
+            } else {
+                return -1;
+            }
+        } else {
+            return -2;
+        }
+    }
+
+    pub fn send_request(&mut self, coid: usize, data: Arc<Vec<u8>>) -> isize {
+        // send
+        if let Some(srv_weak) = self.srv_conn.get_mut(&coid) {
+            if let Some(srv) = srv_weak.upgrade() {
+                if let Some(rcvid) = srv.lock().send_request(coid, data) {
+                    self.session.insert(rcvid, Arc::downgrade(&srv));
+                    return rcvid as isize;
+                }
+            }
+        }
+
+        -1
+    }
+
+    pub fn recv_request(&mut self, name: String) -> Option<Arc<Msg>> {
+        if let Some(srv) = self.named_srv.get(&name) {
+            let msg = srv.lock().recv_request()?;
+            let rcvid = msg.rcvid();
+            Some(msg)
+        } else {
+            None
+        }
+    }
+
+    pub fn send_response(&mut self, rcvid: usize, data: Arc<Vec<u8>>) -> isize {
+        if let Some(srv_weak) = self.session.get(&rcvid) {
+            if let Some(srv) = srv_weak.upgrade() {
+                srv.lock().send_response(rcvid, data);
+                0
+            } else {
+                -1
+            }
+        } else {
+            -2
+        }
+    }
+
+    pub fn recv_response(&mut self, rcvid: usize) -> Option<Arc<Msg>> {
+        let srv = self.session.get(&rcvid)?.upgrade()?;
+        let msg = srv.lock().recv_response(rcvid)?;
+        self.session.remove(&rcvid);
+        Some(msg)
     }
 }
 
