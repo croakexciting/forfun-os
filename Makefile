@@ -2,7 +2,7 @@ TARGET ?= riscv64gc-unknown-none-elf
 MODE ?= release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/forfun-os
 KERNEL_BIN := $(KERNEL_ELF).bin
-APP_BIN := appbins/heap_test
+APP_BIN := appbins/ffos-block-device
 APP_BIN2 := appbins/hello_world
 APP_BIN3 := appbins/sleep_test
 APP_BIN4 := appbins/loop_test
@@ -46,10 +46,8 @@ QEMU_ARGS := -machine virt \
 			 -bios $(BOOTLOADER) \
 			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY) \
 			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY),force-raw=on \
-			 -device loader,file=$(APP_BIN2),addr=$(APP_ENTRY2),force-raw=on \
-			 -device loader,file=$(APP_BIN3),addr=$(APP_ENTRY3),force-raw=on \
-			 -device loader,file=$(APP_BIN4),addr=$(APP_ENTRY4),force-raw=on \
-			 -device loader,file=$(APP_BIN5),addr=$(APP_ENTRY5),force-raw=on
+			-drive file=empty.img,if=none,format=raw,id=x0 \
+			-device virtio-blk-device,drive=x0 \
 			 
 run: build
 ifeq ($(BOARD), qemu)

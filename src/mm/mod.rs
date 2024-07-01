@@ -268,6 +268,23 @@ impl MemoryManager {
         Some(weak_ptr)
     }
 
+    pub fn mmap_with_addr(&mut self, pa: PhysAddr, size: usize, permission: usize) -> isize {
+        assert_eq!(size % PAGE_SIZE, 0);
+
+        let mut ppns: Vec<PhysPage> = Vec::new();
+
+        let mut p = Permission::from_bits_truncate((permission as u8) << 1);
+        p.insert(Permission::U);
+
+        for i in 0..(size/PAGE_SIZE) {
+            let mut ppn: PhysPage = pa.into();
+            ppn = ppn.add(i);
+            ppns.push(ppn)
+        }
+
+        self.map_defined(&ppns, p)
+    }
+
     pub fn umap_dyn_area(&mut self, start_vpn: VirtPage) -> isize {
         if let Some(index) = self.app_areas.iter().position(|a| a.lock().start_vpn == start_vpn) {
             let area  = self.app_areas.remove(index);

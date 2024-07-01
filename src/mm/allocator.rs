@@ -89,6 +89,10 @@ pub fn frame_alloc() -> Option<PhysFrame> {
     FRAME_ALLOCATOR.exclusive_access().alloc()
 }
 
+pub fn frame_dealloc(ppn: PhysPage) {
+    FRAME_ALLOCATOR.exclusive_access().dealloc(ppn)
+}
+
 pub fn kernel_frame_alloc() -> Option<PhysFrame> {
     KERNEL_FRAME_ALLOCATOR.exclusive_access().alloc()
 }

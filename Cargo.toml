@@ -13,6 +13,7 @@ bitflags = "2.5.0"
 xmas-elf = "0.9.1"
 derive_more = "0.99.7"
 spin = "0.9"
+virtio-drivers = "0.7.3"
 
 [features]
 default = ["riscv_qemu"]
