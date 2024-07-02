@@ -3,6 +3,7 @@ use core::cell::RefMut;
 use core::arch::asm;
 use core::ops::{BitAnd, BitOr};
 
+use crate::driver::block::qemu_blk::{read_block, write_block};
 use crate::ipc::id::RcvidHandler;
 use crate::ipc::server::{Msg, Server};
 use crate::ipc::pipe::Pipe;
@@ -873,6 +874,9 @@ impl Process {
 
     // write
     pub fn write(&self, fd: usize, buf: *mut u8, len: usize) -> isize {
+        let buf3 = vec![1; 512];
+        // write_block(0, buf3.as_slice()).unwrap();
+        println!("buf3 value is {}", buf3[0]);
         let user_buf = UserBuffer::new_from_raw(buf, len);
         if let Some(file) = &self.fds[fd] {
             if file.writable() {

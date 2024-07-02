@@ -8,9 +8,10 @@ pub mod pid;
 use app::*;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use spin::mutex::Mutex;
+use virtio_drivers::PAGE_SIZE;
 
 use crate::{
-    mm::basic::VirtAddr, trap::context::TrapContext, utils::type_extern::RefCellWrap
+    driver::block::qemu_blk::write_block, mm::basic::VirtAddr, trap::context::TrapContext, utils::type_extern::RefCellWrap
 };
 
 use lazy_static::*;
@@ -146,4 +147,10 @@ pub fn recv_request(name: String) -> Option<(usize, Arc<Vec<u8>>)> {
 
 pub fn reply_request(rcvid: usize, data: Arc<Vec<u8>>) -> isize {
     TASK_MANAGER.reply_request(rcvid, data)
+}
+
+pub fn write_block_fn(block_id: usize) -> isize {
+    let buf2: [u8; PAGE_SIZE] = [1; PAGE_SIZE];
+    write_block(0, &buf2).unwrap();
+    0
 }

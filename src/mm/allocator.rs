@@ -97,6 +97,10 @@ pub fn kernel_frame_alloc() -> Option<PhysFrame> {
     KERNEL_FRAME_ALLOCATOR.exclusive_access().alloc()
 }
 
+pub fn kernel_frame_dealloc(ppn: PhysPage) {
+    KERNEL_FRAME_ALLOCATOR.exclusive_access().dealloc(ppn)
+}
+
 pub struct AsidAllocator {
     current: u16,
     end: u16,

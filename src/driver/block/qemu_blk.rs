@@ -15,15 +15,27 @@ use lazy_static::*;
 
 const BLK_HEADER_ADDR: usize = 0x10008000;
 
-use crate::{mm::{allocator::{frame_alloc, frame_dealloc, PhysFrame}, basic::{self, PhysPage}, pt}, utils::type_extern::RefCellWrap};
+use crate::{mm::{allocator::{frame_alloc, frame_dealloc, kernel_frame_alloc, kernel_frame_dealloc, PhysFrame}, basic::{self, PhysPage}, pt}, utils::type_extern::RefCellWrap};
 
 use super::BlockDevice;
 
 lazy_static! {
     static ref QUEUE_FRAMES: RefCellWrap<Vec<PhysFrame>> = unsafe { RefCellWrap::new(Vec::new()) };
 }
+
+lazy_static! {
+    static ref BLOCK_DEVICE: QemuBlk = QemuBlk::new();
+}
 pub struct QemuBlk {
     inner: RefCellWrap<VirtIOBlk<HalImpl, MmioTransport>>
+}
+
+pub fn write_block(block_id: usize, buf: &[u8]) -> Result<(), String> {
+    BLOCK_DEVICE.write_block(block_id, buf)
+}
+
+pub fn read_block(block_id: usize, buf: &mut [u8]) -> Result<(), String> {
+    BLOCK_DEVICE.read_block(block_id, buf)
 }
 
 impl QemuBlk {
@@ -81,7 +93,7 @@ unsafe impl Hal for HalImpl {
     fn dma_alloc(pages: usize, _direction: BufferDirection) -> (PhysAddr, NonNull<u8>) {
         let mut ppn_base = PhysPage(0);
         for i in 0..pages {
-            let frame = frame_alloc().unwrap();
+            let frame = kernel_frame_alloc().unwrap();
             if i == 0 {
                 ppn_base = frame.ppn;
             }
@@ -102,7 +114,7 @@ unsafe impl Hal for HalImpl {
         let pa = basic::PhysAddr::from(paddr);
         let mut ppn_base: PhysPage = pa.into();
         for _ in 0..pages {
-            frame_dealloc(ppn_base);
+            kernel_frame_dealloc(ppn_base);
             ppn_base = ppn_base.next();
         }
         0
