@@ -199,6 +199,11 @@ impl TaskManager {
         }
     }
 
+    pub fn open(&self, name: String) -> isize {
+        let mut inner = self.inner_access();
+        inner.open(name)
+    }
+
     pub fn sigaction(&self, signal: usize, handler: usize) -> isize {
         let mut inner = self.inner_access();
         inner.sigaction(signal, handler)
@@ -477,6 +482,10 @@ impl AppManagerInner {
 
     pub fn read(&mut self, fd: usize, buf: *mut u8, len: usize) -> isize {
         self.current_task(true).unwrap().lock().read(fd, buf, len)
+    }
+
+    pub fn open(&mut self, name: String) -> isize {
+        self.current_task(true).unwrap().lock().open(name.as_str())
     }
 
     pub fn sigaction(&mut self, signal: usize, handler: usize) -> isize {
@@ -878,7 +887,7 @@ impl Process {
         let user_buf = UserBuffer::new_from_raw(buf, len);
         if let Some(file) = &self.fds[fd] {
             if file.writable() {
-                return file.write(user_buf) as isize;
+                return file.write(&user_buf) as isize;
             } else {
                 println!("[kernel] {} file is None", fd);
                 return -1;
@@ -899,10 +908,10 @@ impl Process {
     }
 
     pub fn read(&self, fd: usize, buf: *mut u8, len: usize) -> isize {
-        let user_buf = UserBuffer::new_from_raw(buf, len);
+        let mut user_buf = UserBuffer::new_from_raw(buf, len);
         if let Some(file) = &self.fds[fd] {
             if file.readable() {
-                return file.read(user_buf) as isize;
+                return file.read(&mut user_buf) as isize;
             } else {
                 println!("[kernel] {} file is None", fd);
                 return -1;
@@ -911,6 +920,17 @@ impl Process {
 
         println!("[kernel] {} file not in fd table", fd);
         return -2;
+    }
+
+    pub fn open(&mut self, name: &str) -> isize {
+        match name {
+            "qemu-blk" => {
+                let blk = Arc::new(QemuBlk::new());
+                self.fds.push(Some(blk));
+                (self.fds.len() - 1) as isize
+            },
+            _ => -1,
+        }
     }
 
     // signal

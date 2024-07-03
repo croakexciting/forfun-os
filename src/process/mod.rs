@@ -72,6 +72,10 @@ pub fn read(fd: usize, buf: *mut u8, len: usize) -> isize {
     TASK_MANAGER.read(fd, buf, len)
 }
 
+pub fn open(name: String) -> isize {
+    TASK_MANAGER.open(name)
+}
+
 pub fn sigaction(signal: usize, handler: usize) -> isize {
     TASK_MANAGER.sigaction(signal, handler)
 }

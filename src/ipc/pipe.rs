@@ -33,12 +33,12 @@ impl File for Pipe {
         self.writable
     }
 
-    fn read(&self, buf: UserBuffer) -> usize {
-        self.buffer.lock().read(buf.buffer)
+    fn read(&self, buf: &mut UserBuffer) -> isize {
+        self.buffer.lock().read(buf.buffer) as isize
     }
 
-    fn write(&self, buf: UserBuffer) -> usize {
-        self.buffer.lock().write(buf.buffer)
+    fn write(&self, buf: &UserBuffer) -> isize {
+        self.buffer.lock().write(buf.buffer) as isize
     }
 }
 

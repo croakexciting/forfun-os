@@ -13,37 +13,72 @@ use virtio_drivers::{
 };
 
 const BLK_HEADER_ADDR: usize = 0x10008000;
+const BLK_SIZE: usize = 512;
 
 use crate::{
-    mm::{dma::{dma_alloc, dma_dealloc}, pt::translate}, 
-    utils::type_extern::RefCellWrap,
+    file::File, mm::{dma::{dma_alloc, dma_dealloc}, pt::translate}, utils::type_extern::RefCellWrap
 };
 
 use super::BlockDevice;
 
 pub struct QemuBlk {
-    inner: RefCellWrap<VirtIOBlk<HalImpl, MmioTransport>>
+    inner: RefCellWrap<VirtIOBlk<HalImpl, MmioTransport>>,
+    offset: usize
 }
 
 impl QemuBlk {
     pub fn new() -> Self {
-        unsafe { Self { inner: RefCellWrap::new(init_blk().unwrap()) } }
+        unsafe { Self { inner: RefCellWrap::new(init_blk().unwrap()), offset: 0 } }
+    }
+}
+
+impl File for QemuBlk {
+    fn readable(&self) -> bool {
+        true
+    }
+
+    fn writable(&self) -> bool {
+        true
+    }
+
+    fn read(&self, buf: &mut crate::mm::area::UserBuffer) -> isize {
+        match self.read_block(self.block_id(), &mut buf.buffer) {
+            Ok(len) => len as isize,
+            Err(e) => {
+                println!("[kernel] read block failed: {}", e.as_str());
+                -1
+            }
+        }
+    }
+
+    fn write(&self, buf: &crate::mm::area::UserBuffer) -> isize {
+        match self.write_block(self.block_id(), &buf.buffer) {
+            Ok(len) => len as isize,
+            Err(e) => {
+                println!("[kernel] write block failed: {}", e.as_str());
+                -1
+            }
+        }
     }
 }
 
 impl BlockDevice for QemuBlk {
-    fn write_block(&self, block_id: usize, buf: &[u8]) -> Result<(), String> {
+    fn write_block(&self, block_id: usize, buf: &[u8]) -> Result<usize, String> {
         match self.inner.exclusive_access().write_blocks(block_id, buf) {
-            Ok(_) => Ok(()),
+            Ok(_) => Ok(buf.len()),
             Err(e) => Err(e.to_string())
         }
     }
 
-    fn read_block(&self, block_id: usize, buf: &mut [u8]) -> Result<(), String> {
+    fn read_block(&self, block_id: usize, buf: &mut [u8]) -> Result<usize, String> {
         match self.inner.exclusive_access().read_blocks(block_id, buf) {
-            Ok(_) => Ok(()),
+            Ok(_) => Ok(buf.len()),
             Err(e) => Err(e.to_string())
         }
+    }
+
+    fn block_id(&self) -> usize {
+        self.offset / BLK_SIZE
     }
 }
 
@@ -56,7 +91,7 @@ pub fn init_blk() -> Option<VirtIOBlk<HalImpl, MmioTransport>> {
         }
         Ok(transport) => {
             println!(
-                "Detected virtio MMIO device with vendor id {:#X}, device type {:?}, version {:?}",
+                "[kernel] Detected virtio MMIO device with vendor id {:#X}, device type {:?}, version {:?}",
                 transport.vendor_id(),
                 transport.device_type(),
                 transport.version(),
