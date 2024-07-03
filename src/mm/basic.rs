@@ -137,6 +137,10 @@ impl PhysPage {
     pub fn prev(&self) -> Self {
         Self(self.0 - 1)
     }
+
+    pub fn add(&self, size: usize) -> Self {
+        Self(self.0 + size)
+    }
 }
 
 // riscv 中页表等级从高到底叫做 2,1,0 级

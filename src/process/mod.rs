@@ -104,6 +104,14 @@ pub fn mmap(size: usize, permission: usize) -> isize {
     TASK_MANAGER.mmap(size, permission)
 }
 
+pub fn ummap(addr: usize) -> isize {
+    TASK_MANAGER.ummap(addr)
+}
+
+pub fn mmap_with_addr(pa: usize, size: usize, permission: usize) -> isize {
+    TASK_MANAGER.mmap_with_addr(pa, size, permission)
+}
+
 pub fn shm_open(name: String, size: usize, permission: usize) -> isize {
     TASK_MANAGER.create_or_open_shm(name, size, permission)
 }

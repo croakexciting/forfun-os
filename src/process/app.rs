@@ -3,6 +3,8 @@ use core::cell::RefMut;
 use core::arch::asm;
 use core::ops::{BitAnd, BitOr};
 
+use crate::driver::block::qemu_blk::{self, QemuBlk};
+use crate::driver::block::BlockDevice;
 use crate::ipc::id::RcvidHandler;
 use crate::ipc::server::{Msg, Server};
 use crate::ipc::pipe::Pipe;
@@ -12,7 +14,7 @@ use crate::ipc::semaphore::Semaphore;
 use crate::ipc::shm::Shm;
 use crate::mm::allocator::{asid_alloc, AisdHandler};
 use crate::mm::area::UserBuffer;
-use crate::mm::basic::{VirtAddr, VirtPage, PAGE_SIZE};
+use crate::mm::basic::{PhysAddr, VirtAddr, VirtPage, PAGE_SIZE};
 use crate::mm::MemoryManager;
 use crate::process::switch::__switch;
 use crate::trap::context::TrapContext;
@@ -235,6 +237,16 @@ impl TaskManager {
     pub fn mmap(&self, size: usize, permission: usize) -> isize {
         let mut inner = self.inner.exclusive_access();
         inner.mmap(size, permission)
+    }
+
+    pub fn ummap(&self, addr: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        inner.ummap(addr)
+    }
+
+    pub fn mmap_with_addr(&self, pa: usize, size: usize, permission: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        inner.mmap_with_addr(pa, size, permission)
     }
 
     pub fn create_or_open_shm(&self, name: String, size: usize, permission: usize) -> isize {
@@ -509,6 +521,14 @@ impl AppManagerInner {
 
     pub fn mmap(&mut self, size: usize, permission: usize) -> isize {
         self.current_task(true).unwrap().lock().mmap(size, permission)
+    }
+
+    pub fn ummap(&mut self, addr: usize) -> isize {
+        self.current_task(true).unwrap().lock().ummap(addr.into())
+    }
+
+    pub fn mmap_with_addr(&mut self, pa: usize, size: usize, permission: usize) -> isize {
+        self.current_task(true).unwrap().lock().mmap_with_addr(pa.into(), size, permission)
     }
 
     pub fn create_or_open_shm(&mut self, name: String, pn: usize, permission: usize) -> isize {
@@ -952,6 +972,14 @@ impl Process {
         } else {
             -1
         }
+    }
+
+    pub fn ummap(&mut self, addr: VirtAddr) -> isize {
+        self.mm.umap_dyn_area(addr.into())
+    }
+
+    pub fn mmap_with_addr(&mut self, pa: PhysAddr, size: usize, permission: usize) -> isize {
+        self.mm.mmap_with_addr(pa, size, permission)
     }
 }
 
