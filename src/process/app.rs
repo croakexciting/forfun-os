@@ -3,7 +3,8 @@ use core::cell::RefMut;
 use core::arch::asm;
 use core::ops::{BitAnd, BitOr};
 
-use crate::driver::block::qemu_blk::{read_block, write_block};
+use crate::driver::block::qemu_blk::QemuBlk;
+use crate::driver::block::BlockDevice;
 use crate::ipc::id::RcvidHandler;
 use crate::ipc::server::{Msg, Server};
 use crate::ipc::pipe::Pipe;
@@ -16,6 +17,7 @@ use crate::mm::area::UserBuffer;
 use crate::mm::basic::{PhysAddr, PhysPage, VirtAddr, VirtPage, PAGE_SIZE};
 use crate::mm::MemoryManager;
 use crate::process::switch::__switch;
+use crate::test_buf;
 use crate::trap::context::TrapContext;
 use crate::utils::timer::nanoseconds;
 use crate::utils::type_extern::RefCellWrap;
@@ -874,9 +876,10 @@ impl Process {
 
     // write
     pub fn write(&self, fd: usize, buf: *mut u8, len: usize) -> isize {
-        let buf3 = vec![1; 512];
-        // write_block(0, buf3.as_slice()).unwrap();
-        println!("buf3 value is {}", buf3[0]);
+        let blk_device = QemuBlk::new();
+        let mut buf2: vec::Vec<u8> = vec![0; 512];
+        blk_device.read_block(0, buf2.as_mut_slice()).unwrap();
+        println!("buf2 value is {}", buf2[0]);
         let user_buf = UserBuffer::new_from_raw(buf, len);
         if let Some(file) = &self.fds[fd] {
             if file.writable() {

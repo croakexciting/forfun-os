@@ -47,7 +47,7 @@ QEMU_ARGS := -machine virt \
 			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY) \
 			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY),force-raw=on \
 			 -drive file=empty.img,if=none,format=raw,id=x0 \
-			 -device virtio-blk-device,drive=x0 \
+			 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
 			 
 run: build
 ifeq ($(BOARD), qemu)

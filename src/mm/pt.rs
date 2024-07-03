@@ -31,6 +31,10 @@ impl PageTable {
         }
     }
 
+    pub fn new_with_ppn(ppn: usize) -> Self {
+        Self { root: ppn.into(), frames: Vec::new(), index: 0 }
+    }
+
     // 在过程中，会自动创建树干页表中的页表项，但是不会创建叶子页表中的页表项
     // 之所以这么做，是因为树干页表中的页表项指向的是页表，这在页表类中可以管理
     // 而叶子页表中的页表项指向的是 text, data 等段，这是页表类无法管理的，也无需负责管理
@@ -51,6 +55,25 @@ impl PageTable {
                     // 创建一个树干页表，只需要 valid flag 即可
                     *pte = PageTableEntry::new(frame.ppn, PTEFlags::V);
                     self.frames.push(frame);
+                }
+            }
+            ppn = pte.ppn();
+        }
+        None
+    }
+
+    pub fn find_pte_only(&self, vpn: VirtPage) -> Option<&mut PageTableEntry> {
+        let idx = vpn.index();
+        let mut ppn = self.root;
+        for (k, v) in idx.iter().enumerate() {
+            // TODO: 需要考虑下如何在虚地址模式下访问页表
+            let pte = ppn.pte_array()[*v].borrow_mut();
+            if k == 2 {
+                // 从叶子页表中获得了 PTE，直接返回
+                return Some(pte)
+            } else {
+                if !pte.is_valid() {
+                    return None;
                 }
             }
             ppn = pte.ppn();
@@ -110,9 +133,9 @@ impl PageTable {
     }
 
     #[allow(unused)]
-    pub fn translate(&mut self, va: VirtAddr) -> Option<PhysAddr> {
+    pub fn translate(&self, va: VirtAddr) -> Option<PhysAddr> {
         let vp = VirtPage::from(va);
-        if let Some(pte) = self.find_pte(vp) {
+        if let Some(pte) = self.find_pte_only(vp) {
             let pa = pte.ppn().0 << 12 | (va.0 & ((1<<12) - 1));
             return  Some(pa.into());
         }

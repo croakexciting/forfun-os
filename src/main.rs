@@ -23,7 +23,8 @@ mod board;
 
 use core::arch::global_asm;
 extern crate alloc;
-use driver::block::{qemu_blk::{write_block, QemuBlk}, BlockDevice};
+use alloc::vec;
+use driver::block::{qemu_blk::QemuBlk, BlockDevice};
 use mm::basic::PAGE_SIZE;
 use process::{create_proc, run_tasks};
 use linked_list_allocator::LockedHeap;
@@ -48,6 +49,8 @@ fn clear_bss() {
 #[global_allocator]
 /// heap allocator instance
 static HEAP_ALLOCATOR: LockedHeap = LockedHeap::empty();
+
+static test_buf: [u8; 512] = [1; 512];
 
 #[alloc_error_handler]
 /// panic when heap allocation error occurs
@@ -76,9 +79,9 @@ pub fn os_main() -> ! {
     trap::init();
     trap::enable_timer_interrupt();
     timer::set_trigger();
-    // let blk_device = QemuBlk::new();
-    let buf: [u8; PAGE_SIZE] = [1; PAGE_SIZE];
-    write_block(0, &buf).unwrap();
+    let blk_device = QemuBlk::new();
+    let buf: vec::Vec<u8> = vec![1; PAGE_SIZE];
+    blk_device.write_block(0, buf.as_slice()).unwrap();
     // let mut buf3: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
     // blk_device.read_block(0, &mut buf3).unwrap();
     // println!("buf3 value is {}", buf3[0]);

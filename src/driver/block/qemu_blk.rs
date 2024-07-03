@@ -1,6 +1,7 @@
 use core::ptr::NonNull;
 
-use alloc::{string::{String, ToString}, vec::Vec};
+use alloc::{string::{String, ToString}, vec::Vec, vec};
+use riscv::register;
 use virtio_drivers::{
     device::blk::VirtIOBlk, 
     transport::{
@@ -13,30 +14,30 @@ use virtio_drivers::{
 
 use lazy_static::*;
 
-const BLK_HEADER_ADDR: usize = 0x10008000;
+const BLK_HEADER_ADDR: usize = 0x10001000;
 
-use crate::{mm::{allocator::{frame_alloc, frame_dealloc, kernel_frame_alloc, kernel_frame_dealloc, PhysFrame}, basic::{self, PhysPage}, pt}, utils::type_extern::RefCellWrap};
+use crate::{mm::{allocator::{frame_alloc, frame_dealloc, kernel_frame_alloc, kernel_frame_dealloc, PhysFrame, PhysFrames}, basic::{self, PhysPage}, pt::{self, PageTable}}, utils::type_extern::RefCellWrap};
 
 use super::BlockDevice;
 
-lazy_static! {
-    static ref QUEUE_FRAMES: RefCellWrap<Vec<PhysFrame>> = unsafe { RefCellWrap::new(Vec::new()) };
-}
+// lazy_static! {
+//     static ref QUEUE_FRAMES: RefCellWrap<Vec<PhysFrames>> = unsafe { RefCellWrap::new(Vec::new()) };
+// }
 
-lazy_static! {
-    static ref BLOCK_DEVICE: QemuBlk = QemuBlk::new();
-}
+// lazy_static! {
+//     static ref BLOCK_DEVICE: QemuBlk = QemuBlk::new();
+// }
 pub struct QemuBlk {
     inner: RefCellWrap<VirtIOBlk<HalImpl, MmioTransport>>
 }
 
-pub fn write_block(block_id: usize, buf: &[u8]) -> Result<(), String> {
-    BLOCK_DEVICE.write_block(block_id, buf)
-}
+// pub fn write_block(block_id: usize, buf: &[u8]) -> Result<(), String> {
+//     BLOCK_DEVICE.write_block(block_id, buf)
+// }
 
-pub fn read_block(block_id: usize, buf: &mut [u8]) -> Result<(), String> {
-    BLOCK_DEVICE.read_block(block_id, buf)
-}
+// pub fn read_block(block_id: usize, buf: &mut [u8]) -> Result<(), String> {
+//     BLOCK_DEVICE.read_block(block_id, buf)
+// }
 
 impl QemuBlk {
     pub fn new() -> Self {
@@ -53,6 +54,10 @@ impl BlockDevice for QemuBlk {
     }
 
     fn read_block(&self, block_id: usize, buf: &mut [u8]) -> Result<(), String> {
+        let q = self.inner.exclusive_access().virt_queue_size();
+        println!("queue size is: {}", q);
+        let mut id: [u8; 20] = [0; 20];
+        self.inner.exclusive_access().device_id(&mut id).unwrap();
         match self.inner.exclusive_access().read_blocks(block_id, buf) {
             Ok(_) => Ok(()),
             Err(e) => Err(e.to_string())
@@ -91,16 +96,16 @@ pub struct HalImpl;
 
 unsafe impl Hal for HalImpl {
     fn dma_alloc(pages: usize, _direction: BufferDirection) -> (PhysAddr, NonNull<u8>) {
-        let mut ppn_base = PhysPage(0);
-        for i in 0..pages {
-            let frame = kernel_frame_alloc().unwrap();
-            if i == 0 {
-                ppn_base = frame.ppn;
-            }
-            assert_eq!(frame.ppn.0, ppn_base.0 + i);
-            QUEUE_FRAMES.exclusive_access().push(frame);
-        }
-        let pa: basic::PhysAddr = ppn_base.into();
+        // for i in 0..pages {
+        //     let frame = kernel_frame_alloc().unwrap();
+        //     if i == 0 {
+        //         ppn_base = frame.ppn;
+        //     }
+        //     assert_eq!(frame.ppn.0, ppn_base.0 + i);
+        //     QUEUE_FRAMES.exclusive_access().push(frame);
+        // }
+        let frames = kernel_frame_alloc(pages).unwrap();
+        let pa: basic::PhysAddr = frames.ppn.into();
         let ptr = if let Some(a) = NonNull::new(pa.0 as *mut u8) {
             a
         } else {
@@ -111,12 +116,7 @@ unsafe impl Hal for HalImpl {
 
     unsafe fn dma_dealloc(paddr: PhysAddr, _vaddr: NonNull<u8>, pages: usize) -> 
     i32 {
-        let pa = basic::PhysAddr::from(paddr);
-        let mut ppn_base: PhysPage = pa.into();
-        for _ in 0..pages {
-            kernel_frame_dealloc(ppn_base);
-            ppn_base = ppn_base.next();
-        }
+        kernel_frame_dealloc(paddr.into(), pages);
         0
     }
 
@@ -125,7 +125,15 @@ unsafe impl Hal for HalImpl {
     }
 
     unsafe fn share(buffer: NonNull<[u8]>, _direction: BufferDirection) -> PhysAddr {
-        buffer.as_ptr() as *mut u8 as PhysAddr
+        let ppn = register::satp::read().ppn();
+        if ppn == 0 {
+            buffer.as_ptr() as *mut u8 as PhysAddr
+        } else {
+            let pt = PageTable::new_with_ppn(ppn);
+            let va = buffer.as_ptr() as *mut u8 as usize;
+            let pa = pt.translate(va.into());
+            pa.unwrap().0 as PhysAddr
+        }
     }
 
     unsafe fn unshare(_paddr: PhysAddr, _buffer: NonNull<[u8]>, _direction: BufferDirection) {

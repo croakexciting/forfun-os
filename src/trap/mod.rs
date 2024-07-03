@@ -9,7 +9,7 @@ use riscv::register::{
 use virtio_drivers::PAGE_SIZE;
 
 use crate::{
-    driver::block::qemu_blk::{read_block, write_block}, ipc::signal::{SIGILL, SIGSEGV}, process::{
+    ipc::signal::{SIGILL, SIGSEGV}, process::{
         app::SignalCode, 
         back_to_idle, 
         cow, exit, 

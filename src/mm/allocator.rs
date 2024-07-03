@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use lazy_static::*;
 use crate::utils::type_extern::RefCellWrap;
 
-use super::basic::*;
+use super::{basic::*, buddy::BuddyAllocator};
 
 // reserve for apps
 const KERNEL_ALLOCATOR_START: usize = 0x80380000;
@@ -58,11 +58,11 @@ lazy_static! {
         RefCellWrap::new(AsidAllocator::new())
     };
 
-    pub static ref KERNEL_FRAME_ALLOCATOR: RefCellWrap<PhysFrameAllocator> = unsafe {
+    pub static ref KERNEL_FRAME_ALLOCATOR: RefCellWrap<BuddyAllocator> = unsafe {
         let start_ppn: PhysPage = PhysAddr::from(KERNEL_ALLOCATOR_START).into();
-        let end_ppn: PhysPage = PhysAddr::from(ALLOCATOR_START - 1).into();
+        let pn = (ALLOCATOR_START - KERNEL_ALLOCATOR_START) / PAGE_SIZE;
 
-        RefCellWrap::new(PhysFrameAllocator::new(start_ppn, end_ppn))
+        RefCellWrap::new(BuddyAllocator::new(5, start_ppn.0.into(), pn))
     };
 }
 #[derive(Clone)]
@@ -79,11 +79,28 @@ impl PhysFrame {
     }
 }
 
+pub struct PhysFrames {
+    pub ppn: PhysPage,
+    pub pn: usize,
+}
+
+impl PhysFrames {
+    pub fn new(ppn: PhysPage, pn: usize) -> Self {
+        Self { ppn, pn}
+    }
+}
+
 impl Drop for PhysFrame {
     fn drop(&mut self) {
         FRAME_ALLOCATOR.exclusive_access().dealloc(self.ppn);
     }
 }
+
+// impl Drop for PhysFrames {
+//     fn drop(&mut self) {
+//         KERNEL_FRAME_ALLOCATOR.exclusive_access().dealloc(self.ppn.0.into(), self.pn)
+//     }
+// }
 
 pub fn frame_alloc() -> Option<PhysFrame> {
     FRAME_ALLOCATOR.exclusive_access().alloc()
@@ -93,12 +110,14 @@ pub fn frame_dealloc(ppn: PhysPage) {
     FRAME_ALLOCATOR.exclusive_access().dealloc(ppn)
 }
 
-pub fn kernel_frame_alloc() -> Option<PhysFrame> {
-    KERNEL_FRAME_ALLOCATOR.exclusive_access().alloc()
+pub fn kernel_frame_alloc(pn: usize) -> Option<PhysFrames> {
+    let start = KERNEL_FRAME_ALLOCATOR.exclusive_access().alloc(pn)?;
+    let pfs = PhysFrames::new(start.0.into(), pn);
+    Some(pfs)
 }
 
-pub fn kernel_frame_dealloc(ppn: PhysPage) {
-    KERNEL_FRAME_ALLOCATOR.exclusive_access().dealloc(ppn)
+pub fn kernel_frame_dealloc(ppn: PhysPage, pn: usize) {
+    KERNEL_FRAME_ALLOCATOR.exclusive_access().dealloc(ppn.0.into(), pn);
 }
 
 pub struct AsidAllocator {

@@ -3,7 +3,6 @@ use core::arch::asm;
 use riscv::register::satp;
 use virtio_drivers::PAGE_SIZE;
 
-use crate::driver::block::qemu_blk::{write_block, QemuBlk};
 use crate::driver::block::BlockDevice;
 use crate::process::*;
 use crate::arch::riscv64::copy_usize_with_user;

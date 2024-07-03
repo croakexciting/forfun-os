@@ -18,10 +18,10 @@ use crate::trap::context::TrapContext;
 // 出于简单考虑，我第一步计划是将整个内存空间算作一个 map aera
 const KERNEL_START_ADDR: usize = 0x80200000;
 const KERNEL_END_ADDR: usize = 0x80400000;
-const KERNEL_STACK_SIZE: usize = 4096 * 64;
+const KERNEL_STACK_SIZE: usize = 4096 * 8;
 // 暂定将内核栈固定在 0x9000000 这个虚拟地址，大小为 16KiB，其实地址范围是 [0x90000000 - 16KiB, 0x90000000}
 // 而且由于这一大段下面一直到内核空间都是无人使用的，相当于是一个保护页
-const KERNEL_STACK_START: usize = 0x90000000;
+const KERNEL_STACK_START: usize = 0x88000000;
 const USER_STACK_START: usize = 0x80000000;
 
 // 用户栈大小暂固定为 8KiB
