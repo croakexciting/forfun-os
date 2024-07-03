@@ -4,6 +4,7 @@ pub mod allocator;
 pub mod area;
 pub mod elf;
 pub mod buddy;
+pub mod dma;
 
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
@@ -18,7 +19,7 @@ use crate::trap::context::TrapContext;
 // 出于简单考虑，我第一步计划是将整个内存空间算作一个 map aera
 const KERNEL_START_ADDR: usize = 0x80200000;
 const KERNEL_END_ADDR: usize = 0x80400000;
-const KERNEL_STACK_SIZE: usize = 4096 * 4;
+const KERNEL_STACK_SIZE: usize = 4096 * 8;
 // 暂定将内核栈固定在 0x9000000 这个虚拟地址，大小为 16KiB，其实地址范围是 [0x90000000 - 16KiB, 0x90000000}
 // 而且由于这一大段下面一直到内核空间都是无人使用的，相当于是一个保护页
 const KERNEL_STACK_START: usize = 0x90000000;
@@ -30,12 +31,14 @@ const USER_STACK_SIZE: usize = 4096 * 2;
 // The memory manager for a process
 pub struct MemoryManager {
     pt: PageTable,
-    _kernel_area: MapArea,
     kernel_stack_area: MapArea,
-    _device_area: MapArea,
     app_areas: Vec<Arc<Mutex<MapArea>>>,
     // 堆可用区域，左闭右开的集合
     buddy_alloctor: Option<BuddyAllocator>,
+
+    _kernel_area: MapArea,
+    _device_area: MapArea,
+    _dma_area: MapArea,
 }
 
 impl MemoryManager {
@@ -65,30 +68,31 @@ impl MemoryManager {
         // 将外设地址也 map 过去
         let mut device_area = MapArea::new(
             VirtAddr::from(0x1000_0000), 
-            VirtAddr::from(0x1000_1000), 
+            VirtAddr::from(0x1001_0000), 
             MapType::Identical,
             Permission::R | Permission::W | Permission::X
         );
 
         device_area.map(&mut pt);
 
-        let mut elf_area = MapArea::new(
-            VirtAddr::from(0x8200_0000),
-            VirtAddr::from(0x8205_0000),
+        let mut dma_area = MapArea::new(
+            VirtAddr::from(0x8700_0000), 
+            VirtAddr::from(0x8800_0000), 
             MapType::Identical,
-            Permission::R | Permission::W | Permission::X
+            Permission::R | Permission::W
         );
-        elf_area.map(&mut pt);
+        dma_area.map(&mut pt);
 
         let app_areas: Vec<Arc<Mutex<MapArea>>> = Vec::with_capacity(8);
         
         Self {
             pt,
-            _kernel_area: kernel_area,
             kernel_stack_area, 
-            _device_area: device_area,
             app_areas,
             buddy_alloctor: None,
+            _kernel_area: kernel_area,
+            _device_area: device_area,
+            _dma_area: dma_area,
         }
     }
 
@@ -266,6 +270,23 @@ impl MemoryManager {
         self.app_areas.push(area_ptr);
 
         Some(weak_ptr)
+    }
+
+    pub fn mmap_with_addr(&mut self, pa: PhysAddr, size: usize, permission: usize) -> isize {
+        assert_eq!(size % PAGE_SIZE, 0);
+
+        let mut ppns: Vec<PhysPage> = Vec::new();
+
+        let mut p = Permission::from_bits_truncate((permission as u8) << 1);
+        p.insert(Permission::U);
+
+        for i in 0..(size/PAGE_SIZE) {
+            let mut ppn: PhysPage = pa.into();
+            ppn = ppn.add(i);
+            ppns.push(ppn)
+        }
+
+        self.map_defined(&ppns, p)
     }
 
     pub fn umap_dyn_area(&mut self, start_vpn: VirtPage) -> isize {

@@ -72,6 +72,10 @@ pub fn read(fd: usize, buf: *mut u8, len: usize) -> isize {
     TASK_MANAGER.read(fd, buf, len)
 }
 
+pub fn open(name: String) -> isize {
+    TASK_MANAGER.open(name)
+}
+
 pub fn sigaction(signal: usize, handler: usize) -> isize {
     TASK_MANAGER.sigaction(signal, handler)
 }
@@ -102,6 +106,14 @@ pub fn getpid() -> usize {
 
 pub fn mmap(size: usize, permission: usize) -> isize {
     TASK_MANAGER.mmap(size, permission)
+}
+
+pub fn ummap(addr: usize) -> isize {
+    TASK_MANAGER.ummap(addr)
+}
+
+pub fn mmap_with_addr(pa: usize, size: usize, permission: usize) -> isize {
+    TASK_MANAGER.mmap_with_addr(pa, size, permission)
 }
 
 pub fn shm_open(name: String, size: usize, permission: usize) -> isize {

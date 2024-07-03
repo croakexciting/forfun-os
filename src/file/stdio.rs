@@ -11,14 +11,14 @@ impl File for Stdout {
         true
     }
 
-    fn read(&self, _buf: UserBuffer) -> usize {
+    fn read(&self, _buf: &mut UserBuffer) -> isize {
         panic!("Cannot read from stdout")
     }
 
-    fn write(&self, user_buf: UserBuffer) -> usize {
+    fn write(&self, user_buf: &UserBuffer) -> isize {
         let data = user_buf.copy_to_vector();
         let str = core::str::from_utf8(data.as_slice()).unwrap();
         print!("{}", str);
-        data.len()
+        data.len() as isize
     }
 }

@@ -1,5 +1,5 @@
 use crate::process::*;
-use crate::arch::riscv64::copy_usize_with_user;
+use crate::arch::riscv64::{copy_usize_with_user, str_from_user};
 
 /// write buf of length `len`  to a file with `fd`
 /// TODO: only support stdout write, modify this after add filesystem
@@ -9,6 +9,11 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
 
 pub fn sys_read(fd: usize, buf: *mut u8, len: usize) -> isize {
     read(fd, buf, len)
+}
+
+pub fn sys_open(name: *const i8) -> isize {
+    let str = str_from_user(name);
+    open(str)
 }
 
 pub fn sys_create_pipe(buf: *mut usize) -> isize {
