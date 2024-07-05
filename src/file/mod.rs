@@ -1,4 +1,5 @@
 pub mod stdio;
+pub mod qemu_blk;
 
 use crate::mm::area::UserBuffer;
 
@@ -9,4 +10,5 @@ pub trait File: Send + Sync {
     #[allow(unused)]
     fn readable(&self) -> bool;
     fn writable(&self) -> bool;
+    fn lseek(&self, seek: usize) -> isize;
 }

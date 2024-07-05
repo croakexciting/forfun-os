@@ -9,76 +9,42 @@ use virtio_drivers::{
         DeviceType, Transport
     }, 
     BufferDirection, Hal, PhysAddr
-    
 };
 
 const BLK_HEADER_ADDR: usize = 0x10008000;
-const BLK_SIZE: usize = 512;
 
-use crate::{
-    file::File, mm::{dma::{dma_alloc, dma_dealloc}, pt::translate}, utils::type_extern::RefCellWrap
-};
+use crate::mm::{dma::{dma_alloc, dma_dealloc}, pt::translate};
 
 use super::BlockDevice;
 
 pub struct QemuBlk {
-    inner: RefCellWrap<VirtIOBlk<HalImpl, MmioTransport>>,
-    offset: usize
+    device: VirtIOBlk<HalImpl, MmioTransport>,
+    block_size_log2: u8,
 }
 
 impl QemuBlk {
     pub fn new() -> Self {
-        unsafe { Self { inner: RefCellWrap::new(init_blk().unwrap()), offset: 0 } }
-    }
-}
-
-impl File for QemuBlk {
-    fn readable(&self) -> bool {
-        true
-    }
-
-    fn writable(&self) -> bool {
-        true
-    }
-
-    fn read(&self, buf: &mut crate::mm::area::UserBuffer) -> isize {
-        match self.read_block(self.block_id(), &mut buf.buffer) {
-            Ok(len) => len as isize,
-            Err(e) => {
-                println!("[kernel] read block failed: {}", e.as_str());
-                -1
-            }
-        }
-    }
-
-    fn write(&self, buf: &crate::mm::area::UserBuffer) -> isize {
-        match self.write_block(self.block_id(), &buf.buffer) {
-            Ok(len) => len as isize,
-            Err(e) => {
-                println!("[kernel] write block failed: {}", e.as_str());
-                -1
-            }
-        }
+        Self { device: init_blk().unwrap(), block_size_log2: 9 }
     }
 }
 
 impl BlockDevice for QemuBlk {
-    fn write_block(&self, block_id: usize, buf: &[u8]) -> Result<usize, String> {
-        match self.inner.exclusive_access().write_blocks(block_id, buf) {
+    fn write_block(&mut self, block_id: usize, buf: &[u8]) -> Result<usize, String> {
+        match self.device.write_blocks(block_id, buf) {
             Ok(_) => Ok(buf.len()),
             Err(e) => Err(e.to_string())
         }
     }
 
-    fn read_block(&self, block_id: usize, buf: &mut [u8]) -> Result<usize, String> {
-        match self.inner.exclusive_access().read_blocks(block_id, buf) {
+    fn read_block(&mut self, block_id: usize, buf: &mut [u8]) -> Result<usize, String> {
+        match self.device.read_blocks(block_id, buf) {
             Ok(_) => Ok(buf.len()),
             Err(e) => Err(e.to_string())
         }
     }
 
-    fn block_id(&self) -> usize {
-        self.offset / BLK_SIZE
+    fn block_size_log2(&self) -> u8 {
+        self.block_size_log2
     }
 }
 

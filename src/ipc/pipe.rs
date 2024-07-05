@@ -40,6 +40,10 @@ impl File for Pipe {
     fn write(&self, buf: &UserBuffer) -> isize {
         self.buffer.lock().write(buf.buffer) as isize
     }
+
+    fn lseek(&self, offset: usize) -> isize {
+        offset as isize
+    }
 }
 
 struct RingBuffer {

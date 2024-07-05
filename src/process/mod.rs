@@ -5,6 +5,8 @@ pub mod switch;
 pub mod context;
 pub mod pid;
 
+use core::usize;
+
 use app::*;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use spin::mutex::Mutex;
@@ -75,6 +77,10 @@ pub fn read(fd: usize, buf: *mut u8, len: usize) -> isize {
 pub fn open(name: String) -> isize {
     TASK_MANAGER.open(name)
 }
+
+pub fn lseek(fd: usize, seek: usize) -> isize {
+    TASK_MANAGER.lseek(fd, seek)
+} 
 
 pub fn sigaction(signal: usize, handler: usize) -> isize {
     TASK_MANAGER.sigaction(signal, handler)

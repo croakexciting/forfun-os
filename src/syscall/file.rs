@@ -16,6 +16,10 @@ pub fn sys_open(name: *const i8) -> isize {
     open(str)
 }
 
+pub fn sys_lseek(fd: usize, seek: usize) -> isize {
+    lseek(fd, seek)
+}
+
 pub fn sys_create_pipe(buf: *mut usize) -> isize {
     unsafe {
         let arr = core::slice::from_raw_parts_mut(buf, 2);

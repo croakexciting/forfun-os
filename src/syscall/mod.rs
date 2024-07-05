@@ -5,6 +5,7 @@ const SYSCALL_READ: usize = 0;
 const SYSCALL_WRITE: usize = 1;
 const SYSCALL_OPEN: usize = 2;
 const SYSCALL_CLOSE: usize = 3;
+const SYSCALL_LSEEK: usize = 4;
 const SYSCALL_MMAP: usize = 9;
 const SYSCALL_UMMAP: usize = 10;
 const SYSCALL_MMAP_WITH_ADDR: usize = 11;
@@ -45,6 +46,7 @@ pub fn syscall(id: usize, args: [usize; 4]) -> isize {
         SYSCALL_READ => sys_read(args[0], args[1] as *mut u8, args[2]),
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
         SYSCALL_OPEN => sys_open(args[0] as *const i8),
+        SYSCALL_LSEEK => sys_lseek(args[0], args[1]),
         SYSCALL_MMAP => sys_mmap(args[0] as usize, args[1] as usize),
         SYSCALL_UMMAP => sys_ummap(args[0]),
         SYSCALL_MMAP_WITH_ADDR => sys_mmap_with_addr(args[0], args[1], args[2]),

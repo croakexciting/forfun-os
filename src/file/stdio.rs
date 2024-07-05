@@ -21,4 +21,8 @@ impl File for Stdout {
         print!("{}", str);
         data.len() as isize
     }
+
+    fn lseek(&self, offset: usize) -> isize {
+        offset as isize
+    }
 }

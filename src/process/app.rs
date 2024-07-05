@@ -5,6 +5,7 @@ use core::ops::{BitAnd, BitOr};
 
 use crate::driver::block::qemu_blk::{self, QemuBlk};
 use crate::driver::block::BlockDevice;
+use crate::file::qemu_blk::QemuBlkFile;
 use crate::ipc::id::RcvidHandler;
 use crate::ipc::server::{Msg, Server};
 use crate::ipc::pipe::Pipe;
@@ -202,6 +203,11 @@ impl TaskManager {
     pub fn open(&self, name: String) -> isize {
         let mut inner = self.inner_access();
         inner.open(name)
+    }
+
+    pub fn lseek(&self, fd: usize, seek: usize) -> isize {
+        let mut inner = self.inner_access();
+        inner.lseek(fd, seek)
     }
 
     pub fn sigaction(&self, signal: usize, handler: usize) -> isize {
@@ -486,6 +492,10 @@ impl AppManagerInner {
 
     pub fn open(&mut self, name: String) -> isize {
         self.current_task(true).unwrap().lock().open(name.as_str())
+    }
+
+    pub fn lseek(&mut self, fd: usize, seek: usize) -> isize {
+        self.current_task(true).unwrap().lock().lseek(fd, seek)
     }
 
     pub fn sigaction(&mut self, signal: usize, handler: usize) -> isize {
@@ -925,12 +935,21 @@ impl Process {
     pub fn open(&mut self, name: &str) -> isize {
         match name {
             "qemu-blk" => {
-                let blk = Arc::new(QemuBlk::new());
+                let blk = Arc::new(QemuBlkFile::new());
                 self.fds.push(Some(blk));
                 (self.fds.len() - 1) as isize
             },
             _ => -1,
         }
+    }
+
+    pub fn lseek(&mut self, fd: usize, seek: usize) -> isize {
+        if let Some(file) = &self.fds[fd] {
+            return file.lseek(seek)
+        }
+
+        println!("[kernel] {} file not in fd table", fd);
+        return -2;
     }
 
     // signal
