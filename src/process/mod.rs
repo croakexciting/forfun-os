@@ -12,7 +12,7 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 use spin::mutex::Mutex;
 
 use crate::{
-    mm::basic::VirtAddr, trap::context::TrapContext, utils::type_extern::RefCellWrap
+    mm::{area::UserBuffer, basic::VirtAddr}, trap::context::TrapContext, utils::type_extern::RefCellWrap
 };
 
 use lazy_static::*;
@@ -37,7 +37,7 @@ pub fn fork() -> isize {
     TASK_MANAGER.fork()
 }
 
-pub fn exec(elf: usize) -> isize {
+pub fn exec(elf: &[u8]) -> isize {
     TASK_MANAGER.exec(elf)
 }
 
@@ -150,8 +150,8 @@ pub fn request(coid: usize, data: Arc<Vec<u8>>) -> Option<Arc<Vec<u8>>> {
     TASK_MANAGER.request(coid, data)
 }
 
-pub fn recv_request(name: String) -> Option<(usize, Arc<Vec<u8>>)> {
-    TASK_MANAGER.recv_request(name)
+pub fn recv_request(name: String, timeout_ms: usize) -> Option<(usize, Arc<Vec<u8>>)> {
+    TASK_MANAGER.recv_request(name, timeout_ms)
 }
 
 pub fn reply_request(rcvid: usize, data: Arc<Vec<u8>>) -> isize {

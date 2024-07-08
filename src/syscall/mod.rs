@@ -57,7 +57,7 @@ pub fn syscall(id: usize, args: [usize; 4]) -> isize {
         SYSCALL_YIELD => {sys_yield(); 0},
         SYSCALL_NANOSLEEP => {sys_nanosleep(args[0] as usize); 0},
         SYSCALL_FORK => {sys_fork()},
-        SYSCALL_EXEC => {sys_exec(args[0] as usize)},
+        SYSCALL_EXEC => {sys_exec(args[0] as *mut u8, args[1])},
         SYSCALL_WAIT => {sys_wait(args[0] as isize)},
         SYSCALL_PIPE => sys_create_pipe(args[0] as *mut usize),
         SYSCALL_GETPID => sys_getpid(),
@@ -69,7 +69,7 @@ pub fn syscall(id: usize, args: [usize; 4]) -> isize {
         SYSCALL_SRV_CREATE => sys_create_server(args[0] as *const i8),
         SYSCALL_SRV_CONNECT => sys_connect_server(args[0] as *const i8),
         SYSCALL_SRV_REQUEST => sys_request(args[0], args[1] as *const u8, args[2], args[3] as *mut u8),
-        SYSCALL_SRV_RECV => sys_recv_request(args[0] as *const i8, args[1] as *mut u8, args[2] as *mut usize),
+        SYSCALL_SRV_RECV => sys_recv_request(args[0] as *const i8, args[1] as *mut u8, args[2] as *mut usize, args[3]),
         SYSCALL_SRV_REPLY => sys_replay_request(args[0], args[1] as *const u8, args[2]),
         _ => panic!("Unsupported syscall id: {}", id),
     }

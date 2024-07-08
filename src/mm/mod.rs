@@ -183,8 +183,8 @@ impl MemoryManager {
 
         // 添加一个保护页
         let start_vpn = offset.next();
-        // 预留 512M，也就是 128*1000 个页
-        self.buddy_alloctor = Some(BuddyAllocator::new(10, start_vpn, 128*1000));
+        // 预留 512M，也就是 32*1000 个页
+        self.buddy_alloctor = Some(BuddyAllocator::new(10, start_vpn, 32*1000));
 
         let user_stack_top: VirtAddr = USER_STACK_START.into();
         let user_stack_bottom: VirtAddr = user_stack_top.reduce(USER_STACK_SIZE);

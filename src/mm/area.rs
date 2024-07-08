@@ -106,7 +106,9 @@ impl MapArea {
 
     pub fn map(&mut self, pt: &mut PageTable) -> i32 {
         for v in self.start_vpn.0..self.end_vpn.0 {
-            self.map_one(pt, v.into(), None);
+            if let None = self.map_one(pt, v.into(), None) {
+                return -1;
+            }
         }
 
         return 0;

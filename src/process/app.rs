@@ -151,7 +151,7 @@ impl TaskManager {
         inner.fork()
     }
 
-    pub fn exec(&self, elf: usize) -> isize {
+    pub fn exec(&self, elf: &[u8]) -> isize {
         let mut inner = self.inner_access();
         inner.exec(elf)
     }
@@ -322,8 +322,13 @@ impl TaskManager {
         }
     }
 
-    pub fn recv_request(&self, name: String) -> Option<(usize, Arc<Vec<u8>>)> {
+    pub fn recv_request(&self, name: String, timeout_ms: usize) -> Option<(usize, Arc<Vec<u8>>)> {
+        let start_ts = nanoseconds();
         loop {
+            if (nanoseconds() - start_ts > timeout_ms * 1000_000 ) && (timeout_ms > 0) {
+                return None;
+            }
+
             let mut inner = self.inner.exclusive_access();
             if let Some(msg) = inner.recv_request(name.to_owned()) {
                 return Some((msg.rcvid(), msg.data()));
@@ -460,7 +465,7 @@ impl AppManagerInner {
         pid as isize
     }
 
-    pub fn exec(&mut self, elf: usize) -> isize {
+    pub fn exec(&mut self, elf: &[u8]) -> isize {
         match self.current_task(true).unwrap().lock().exec(elf) {
             Ok(_) => {return 0;}
             Err(e) => {
@@ -795,14 +800,10 @@ impl Process {
         weak
     }
 
-    pub fn exec(&mut self, data_addr: usize) -> Result<(), &'static str> {
-        let elf = unsafe {
-            core::slice::from_raw_parts(data_addr as *mut u8, 4096 * 16)
-        };
-
+    pub fn exec(&mut self, elf: &[u8]) -> Result<(), &'static str> {
         // unmap all app area, for load elf again
         self.mm.unmap_app();
-        let (sp, pc) = self.mm.load_elf(elf, true)?;
+        let (sp, pc) = self.mm.load_elf(&elf, true)?;
         let trap_ctx = TrapContext::new(pc, sp);
         let kernel_sp = self.mm.runtime_push_context(trap_ctx);
         self.ctx = SwitchContext::new_with_restore_addr(kernel_sp);

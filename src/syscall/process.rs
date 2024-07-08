@@ -1,4 +1,4 @@
-use crate::process::*;
+use crate::{arch::riscv64::copy_from_user_into_vector, mm::area::UserBuffer, process::*};
 
 pub fn sys_exit(code: isize) -> ! {
     exit(code as isize);
@@ -18,8 +18,9 @@ pub fn sys_fork() -> isize {
     fork()
 }
 
-pub fn sys_exec(addr: usize) -> isize {
-    exec(addr)
+pub fn sys_exec(addr: *mut u8, len: usize) -> isize {
+    let user_buf = copy_from_user_into_vector(addr, len);
+    exec(&user_buf.as_slice())
 }
 
 pub fn sys_wait(pid: isize) -> isize {

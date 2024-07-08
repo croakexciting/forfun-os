@@ -61,9 +61,9 @@ pub fn sys_request(coid: usize, req: *const u8, req_len: usize, resp: *mut u8) -
     }
 }
 
-pub fn sys_recv_request(name: *const i8, req: *mut u8, req_len: *mut usize) -> isize {
+pub fn sys_recv_request(name: *const i8, req: *mut u8, req_len: *mut usize, timeout_ms: usize) -> isize {
     let str = str_from_user(name);
-    if let Some(req_data) = recv_request(str) {
+    if let Some(req_data) = recv_request(str, timeout_ms) {
         // 确保数据在内核堆中已经被丢弃释放
         let raw_vec = Arc::try_unwrap(req_data.1).unwrap();
         let len = copy_vector_to_user(raw_vec, req);
