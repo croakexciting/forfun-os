@@ -1,4 +1,4 @@
-use crate::mm::area::UserBuffer;
+use crate::{driver::serial::console_getchar, mm::area::UserBuffer};
 use super::File;
 pub struct Stdout;
 
@@ -24,5 +24,35 @@ impl File for Stdout {
 
     fn lseek(&self, offset: usize) -> isize {
         offset as isize
+    }
+}
+
+pub struct Stdin;
+
+impl File for Stdin {
+    fn readable(&self) -> bool {
+        true
+    }
+
+    fn writable(&self) -> bool {
+        false
+    }
+
+    fn read(&self, buf: &mut UserBuffer) -> isize {
+        let c = console_getchar();
+        if c as u8 == 0 {
+            return 0;
+        } else {
+            buf.buffer[0] = c as u8;
+            return 1;
+        }
+    }
+
+    fn write(&self, _buf: &UserBuffer) -> isize {
+        panic!("[kernel] Stdin can't write")
+    }
+
+    fn lseek(&self, seek: usize) -> isize {
+        seek as isize
     }
 }

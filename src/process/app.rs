@@ -9,7 +9,7 @@ use crate::file::qemu_blk::QemuBlkFile;
 use crate::ipc::id::RcvidHandler;
 use crate::ipc::server::{Msg, Server};
 use crate::ipc::pipe::Pipe;
-use crate::file::stdio::Stdout;
+use crate::file::stdio::{Stdin, Stdout};
 use crate::file::File;
 use crate::ipc::semaphore::Semaphore;
 use crate::ipc::shm::Shm;
@@ -752,7 +752,7 @@ impl Process {
             asid: asid_alloc().unwrap(),
             fds: vec![
                 // 0 -> stdin
-                None,
+                Some(Arc::new(Stdin)),
                 // 1 -> stdout
                 Some(Arc::new(Stdout)),
                 // 2 -> stderr
