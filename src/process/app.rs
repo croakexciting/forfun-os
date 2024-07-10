@@ -1008,7 +1008,7 @@ impl Process {
 
     pub fn mmap(&mut self, size: usize, permission: usize) -> isize {
         if let Some(area) = self.mm.mmap(size, permission).unwrap().upgrade() {
-            return VirtAddr::from(area.lock().start_vpn).0 as isize
+            return VirtAddr::from(area.read().start_vpn).0 as isize
         } else {
             -1
         }

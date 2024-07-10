@@ -2,7 +2,7 @@ TARGET ?= riscv64gc-unknown-none-elf
 MODE ?= release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/forfun-os
 KERNEL_BIN := $(KERNEL_ELF).bin
-APP_BIN := appbins/shell_test
+APP_BIN := appbins/mmap_test
 
 ifeq ($(MODE), release)
 	MODE_ARG := --release

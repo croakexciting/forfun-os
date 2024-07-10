@@ -12,7 +12,7 @@ use area::{MapArea, Permission, MapType};
 use basic::{PhysAddr, PhysPage, VirtAddr, VirtPage, PAGE_SIZE};
 use buddy::BuddyAllocator;
 use pt::PageTable;
-use spin::mutex::Mutex;
+use spin::rwlock::RwLock;
 
 use crate::trap::context::TrapContext;
 
@@ -32,7 +32,7 @@ const USER_STACK_SIZE: usize = 4096 * 2;
 pub struct MemoryManager {
     pt: PageTable,
     kernel_stack_area: MapArea,
-    app_areas: Vec<Arc<Mutex<MapArea>>>,
+    app_areas: Vec<Arc<RwLock<MapArea>>>,
     // 堆可用区域，左闭右开的集合
     buddy_alloctor: Option<BuddyAllocator>,
 
@@ -83,7 +83,7 @@ impl MemoryManager {
         );
         dma_area.map(&mut pt);
 
-        let app_areas: Vec<Arc<Mutex<MapArea>>> = Vec::with_capacity(8);
+        let app_areas: Vec<Arc<RwLock<MapArea>>> = Vec::with_capacity(8);
         
         Self {
             pt,
@@ -105,9 +105,9 @@ impl MemoryManager {
         }
     }
 
-    fn dealloc(&mut self, area: &Arc<Mutex<MapArea>>) {
-        let vpn = area.lock().start_vpn;
-        let pn = area.lock().end_vpn.0 - area.lock().start_vpn.0;
+    fn dealloc(&mut self, area: &Arc<RwLock<MapArea>>) {
+        let vpn = area.read().start_vpn;
+        let pn = area.read().end_vpn.0 - area.read().start_vpn.0;
         if let Some(allocator) = &mut self.buddy_alloctor {
             allocator.dealloc(vpn, pn)
         }
@@ -177,7 +177,7 @@ impl MemoryManager {
                         &elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize])?;
                 }
                 offset = area.end_vpn;
-                self.app_areas.push(Arc::new(Mutex::new(area)));
+                self.app_areas.push(Arc::new(RwLock::new(area)));
             }
         }
 
@@ -196,7 +196,7 @@ impl MemoryManager {
         );
         stack_area.map(&mut self.pt);
         self.app_areas.push(
-            Arc::new(Mutex::new(stack_area))
+            Arc::new(RwLock::new(stack_area))
         );
 
         Ok((user_stack_top.0 - 0x100, elf.header.pt2.entry_point() as usize))
@@ -206,8 +206,8 @@ impl MemoryManager {
         // 将父进程的所有 app area 复制一份，并且为 physframe 计数 +1
         self.app_areas.reserve(parent.app_areas.len());
         for area in parent.app_areas.iter_mut() {
-            let new_area = area.lock().fork(&mut parent.pt, &mut self.pt);
-            self.app_areas.push(Arc::new(Mutex::new(new_area)));
+            let new_area = area.write().fork(&mut parent.pt, &mut self.pt);
+            self.app_areas.push(Arc::new(RwLock::new(new_area)));
         }
 
         let ctx = parent.runtime_pull_context();
@@ -233,8 +233,8 @@ impl MemoryManager {
 
     pub fn cow(&mut self, vpn: VirtPage) -> Result<(), &'static str> {
         for m in self.app_areas.iter_mut() {
-            if m.lock().start_vpn.0 <= vpn.0 && vpn.0 < m.lock().end_vpn.0 {
-                return m.lock().cow(&mut self.pt, vpn)
+            if m.read().start_vpn.0 <= vpn.0 && vpn.0 < m.read().end_vpn.0 {
+                return m.write().cow(&mut self.pt, vpn)
             }
         }
 
@@ -244,13 +244,13 @@ impl MemoryManager {
 
     pub fn unmap_app(&mut self) {
         for area in self.app_areas.iter_mut() {
-            area.lock().unmap(&mut self.pt);
+            area.write().unmap(&mut self.pt);
         }
 
         self.app_areas.clear();
     }
 
-    pub fn mmap(&mut self, size: usize, permission: usize) -> Option<Weak<Mutex<MapArea>>> {
+    pub fn mmap(&mut self, size: usize, permission: usize) -> Option<Weak<RwLock<MapArea>>> {
         assert_eq!(size % PAGE_SIZE, 0);
 
         let mut p = Permission::from_bits_truncate((permission as u8) << 1);
@@ -265,7 +265,7 @@ impl MemoryManager {
             p
         );
         new_area.map(&mut self.pt);
-        let area_ptr = Arc::new(Mutex::new(new_area));
+        let area_ptr = Arc::new(RwLock::new(new_area));
         let weak_ptr = Arc::downgrade(&area_ptr);
         self.app_areas.push(area_ptr);
 
@@ -290,7 +290,7 @@ impl MemoryManager {
     }
 
     pub fn umap_dyn_area(&mut self, start_vpn: VirtPage) -> isize {
-        if let Some(index) = self.app_areas.iter().position(|a| a.lock().start_vpn == start_vpn) {
+        if let Some(index) = self.app_areas.iter().position(|a| a.read().start_vpn == start_vpn) {
             let area  = self.app_areas.remove(index);
             self.dealloc(&area);
             return 0;
@@ -310,7 +310,7 @@ impl MemoryManager {
                 permission.clone()
             );
             new_area.map_defined(&mut self.pt, ppns);
-            let area_ptr = Arc::new(Mutex::new(new_area));
+            let area_ptr = Arc::new(RwLock::new(new_area));
             self.app_areas.push(area_ptr);
             VirtAddr::from(vpns.0).0 as isize
         } else {
