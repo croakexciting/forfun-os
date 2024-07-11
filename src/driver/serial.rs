@@ -24,15 +24,13 @@ impl Uart {
             ptr::write_volatile(self.addr as *mut char, c);
         }
     }
-
-    #[allow(unused)]
-    pub fn get(&self) -> char {
-        unsafe {
-            ptr::read_volatile(self.addr as *mut char)
-        }
-    }
 }
 
 pub fn console_putchar(c: char) {
     CONSOLE.exclusive_access().put(c);
+}
+
+pub fn console_getchar() -> usize {
+    #[allow(deprecated)]
+    sbi_rt::legacy::console_getchar()
 }
