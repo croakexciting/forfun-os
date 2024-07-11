@@ -2,7 +2,7 @@ TARGET ?= riscv64gc-unknown-none-elf
 MODE ?= release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/forfun-os
 KERNEL_BIN := $(KERNEL_ELF).bin
-APP_BIN := appbins/mmap_test
+APP_BIN := appbins/fs_test
 
 ifeq ($(MODE), release)
 	MODE_ARG := --release
@@ -57,7 +57,11 @@ debug: build
 gdbclient:
 	@riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'
 
+createfs:
+	@qemu-img create -f raw ../forfun-os/sfs.img 512M
+	./tools/sfs-pack -s ./appbins/ -t ./ create
+
 kill:
 	@pkill -f qemu-system-riscv
 
-.PHONY: build clean run kill gdbclient
+.PHONY: build clean run kill gdbclient createfs
