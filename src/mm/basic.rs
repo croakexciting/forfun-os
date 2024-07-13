@@ -130,6 +130,11 @@ impl PhysPage {
         unsafe {core::slice::from_raw_parts_mut(addr.0 as *mut u8, 4096)}
     }
 
+    pub fn clear_page(&self) {
+        let slice = self.bytes_array();
+        slice.fill(0);
+    }
+
     pub fn next(&self) -> Self {
         Self(self.0 + 1)
     }

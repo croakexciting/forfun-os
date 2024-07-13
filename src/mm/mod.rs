@@ -203,7 +203,7 @@ impl MemoryManager {
     }
 
     pub fn fork(&mut self, parent: &mut Self) {
-        // 将父进程的所有 app area 复制一份，并且为 physframe 计数 +1
+        // 将父进程的所有 app area 复制一份，通过智能指针来实现自动 drop
         self.app_areas.reserve(parent.app_areas.len());
         for area in parent.app_areas.iter_mut() {
             let new_area = area.write().fork(&mut parent.pt, &mut self.pt);
@@ -292,6 +292,7 @@ impl MemoryManager {
     pub fn umap_dyn_area(&mut self, start_vpn: VirtPage) -> isize {
         if let Some(index) = self.app_areas.iter().position(|a| a.read().start_vpn == start_vpn) {
             let area  = self.app_areas.remove(index);
+            area.write().unmap(&mut self.pt);
             self.dealloc(&area);
             return 0;
         }

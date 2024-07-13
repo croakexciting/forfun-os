@@ -113,6 +113,8 @@ impl PageTable {
         pte.clear();
         return 0;
     }
+
+    // TODO: add a pte frame dealloc function
     
     pub fn remap(&mut self, vpn: VirtPage, ppn: PhysPage, flags: PTEFlags) -> Option<PageTableEntry> {
         if self.unmap(vpn) < 0 {
