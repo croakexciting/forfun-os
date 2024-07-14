@@ -1,0 +1,13 @@
+[package]
+name = "ffos-app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+buddy_system_allocator = "0.6"
+rcore-fs = { git = "https://github.com/rcore-os/rcore-fs.git" }
+rcore-fs-sfs = { git = "https://github.com/rcore-os/rcore-fs.git" }
+spin = "0.9"
+
+[profile.release]
+debug = true

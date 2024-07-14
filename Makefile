@@ -1,64 +1,39 @@
 TARGET ?= riscv64gc-unknown-none-elf
 MODE ?= release
-KERNEL_ELF := target/$(TARGET)/$(MODE)/forfun-os
-KERNEL_BIN := $(KERNEL_ELF).bin
-APP_BIN := appbins/fs_test
 
-ifeq ($(MODE), release)
-	MODE_ARG := --release
-endif
+.PHONY: build_kernel clean_kernel debug gdbclient \
+		build_user clean_user \
+		kill docker_start docker_into createfs build run clean
 
-# board
-BOARD ?= qemu
-SBI ?= rustsbi
-BOOTLOADER := ./bootloader/$(SBI)-$(BOARD).bin
+build_kernel:
+	${MAKE} -C os build
 
-# k210 setting
-K210-SERIALPORT ?= /dev/ttyUSB0
-K210-BOARD ?= kd233
-K210_BOOTLOADER_SIZE := 131072
+build_user:
+	${MAKE} -C user build
 
-KERNEL_ENTRY := 0x80200000
-APP_ENTRY := 0x81000000
+build: build_kernel build_user
 
-# Binutils
-OBJDUMP := rust-objdump --arch-name=riscv64
-OBJCOPY := rust-objcopy --binary-architecture=riscv64
-
-build:
-	@echo Platform: $(BOARD)
-	@cargo build --target ${TARGET} $(MODE_ARG)
-	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary ${KERNEL_BIN}
-
-clean:
-	@cargo clean
-
-QEMU_ARGS := -machine virt \
-			 -nographic \
-			 -bios $(BOOTLOADER) \
-			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY) \
-			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY),force-raw=on \
-			 -drive file=sfs.img,if=none,format=raw,id=x0 \
-			 -device virtio-blk-device,drive=x0 \
-			 
 run: build
-ifeq ($(BOARD), qemu)
-	@qemu-system-riscv64 $(QEMU_ARGS)
-else ifeq ($(BOARD), k210)
-	@cp $(BOOTLOADER) $(BOOTLOADER).copy
-	@dd if=$(KERNEL_BIN) of=$(BOOTLOADER).copy bs=$(K210_BOOTLOADER_SIZE) seek=1
-	@mv $(BOOTLOADER).copy $(KERNEL_BIN)
-	python3 tools/kflash/kflash.py -p $(K210-SERIALPORT) -b 1500000 -B $(K210-BOARD) -t $(KERNEL_BIN)
-endif
+	${MAKE} -C os run
 
-debug: build
-	qemu-system-riscv64 $(QEMU_ARGS) -s -S
+clean_kernel:
+	${MAKE} -C os clean
+
+clean_user:
+	${MAKE} -C user clean
+
+clean: clean_kernel clean_user
+
+debug:
+	${MAKE} -C os debug
 
 gdbclient:
-	@riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'
+	${MAKE} -C os gdbclient
 
 createfs:
-	@qemu-img create -f raw ../forfun-os/sfs.img 512M
+	@bash scripts/install_apps.sh ${TARGET} ${MODE}
+	@rm -f sfs.img
+	@qemu-img create -f raw sfs.img 512M
 	./tools/sfs-pack -s ./appbins/ -t ./ create
 
 kill:
@@ -69,5 +44,3 @@ docker_start:
 
 docker_into:
 	@docker exec -it ffos_dev bash
-
-.PHONY: build clean run kill gdbclient createfs docker_start docker_into

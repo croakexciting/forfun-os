@@ -1,0 +1,5 @@
+[toolchain]
+profile = "minimal"
+channel = "nightly-2024-05-20"
+components = ["rust-src", "llvm-tools-preview", "rustfmt", "clippy"]
+targets = ["riscv64gc-unknown-none-elf"]
