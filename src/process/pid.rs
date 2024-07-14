@@ -29,10 +29,13 @@ impl PidAllocator {
 
     // 按照顺序
     pub fn alloc(&mut self) -> Option<PidHandler> {
-        if let Some(pid) = self.recycled.pop() {
-            Some(PidHandler(pid))
-        } else if self.current == self.end {
-            None
+
+        if self.current == self.end {
+            if let Some(pid) = self.recycled.pop() {
+                Some(PidHandler(pid))
+            } else {
+                None
+            }
         } else {
             self.current += 1;
             Some(PidHandler(self.current - 1))

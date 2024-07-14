@@ -116,7 +116,9 @@ impl TaskManager {
     pub fn back_to_idle(&self) {
         let mut inner = self.inner_access();
         let idle_ctx = inner.idle_ctx();
-        let current_ctx_ptr = inner.current_task(false).unwrap().lock().ctx_ptr();
+        let current = inner.current_task(false).unwrap();
+        let current_ctx_ptr = current.lock().ctx_ptr();
+        drop(current);
         drop(inner);
         unsafe { __switch(current_ctx_ptr, idle_ctx); }
     }
@@ -414,20 +416,13 @@ impl AppManagerInner {
         0
     }
 
-    pub fn activate_task(&mut self, id: usize) -> Result<(), &'static str> {
-        if let Some(task) = self.tasks[id].upgrade() {
-            Ok(())
-        } else {
-            Err("task instance not exists now.")
-        }
-    } 
-
     fn current_task(&mut self, must: bool) -> Option<Arc<Mutex<Process>>> {
         match self.task(self.current) {
             Ok(p) => {
                 Some(p)
             }
-            Err(_) => {
+            Err(e) => {
+                // println!("[kernel] get task {} failed, {}", self.current, e);
                 if must == false {
                     return self.next_task()
                 } else {
@@ -447,7 +442,8 @@ impl AppManagerInner {
                 Ok(p) => {
                     Some(p)
                 }
-                Err(_) => {
+                Err(e) => {
+                    // println!("[kernel] get task {} failed, {}", self.current, e);
                     self.next_task()
                 } 
             }
@@ -459,8 +455,7 @@ impl AppManagerInner {
     }
 
     pub fn fork(&mut self) -> isize {
-        let child = Process::fork(self.current_task(true).unwrap().clone());
-        let pid = child.upgrade().unwrap().lock().pid.0;
+        let (child, pid) = self.current_task(true).unwrap().lock().fork();
         self.tasks.push(child);
         pid as isize
     }
@@ -724,7 +719,7 @@ pub struct Process {
     pub tick: usize,
     pub status: ProcessStatus,
     pub pid: PidHandler,
-    pub parent: Option<Weak<Mutex<Self>>>,
+    pub parent: Option<usize>,
     pub children: BTreeMap<usize, Arc<Mutex<Self>>>,
     
     ctx: SwitchContext,
@@ -765,24 +760,24 @@ impl Process {
         }
     }
 
-    pub fn fork(parent: Arc<Mutex<Self>>) -> Weak<Mutex<Self>> {
+    pub fn fork(&mut self) -> (Weak<Mutex<Self>>, usize) {
         let mut mm = MemoryManager::new();
-        mm.fork(&mut parent.lock().mm);
+        mm.fork(&mut self.mm);
         let switch_ctx = SwitchContext::new_with_restore_addr_and_sp();
         let pid = pid::alloc().unwrap();
         let key = pid.0;
-        let tick = parent.lock().tick;
-        let fds = parent.lock().fds.clone();
-        let signals =  parent.lock().signals;
-        let signals_mask = parent.lock().signals_mask;
-        let signal_actions = parent.lock().signal_actions.clone();
+        let tick = self.tick;
+        let fds = self.fds.clone();
+        let signals =  self.signals;
+        let signals_mask = self.signals_mask;
+        let signal_actions = self.signal_actions.clone();
 
         let child = Arc::new(Mutex::new(
             Self {
                 tick,
                 status: ProcessStatus::READY,
                 pid,
-                parent: Some(Arc::downgrade(&parent)),
+                parent: Some(self.pid.0),
                 children: BTreeMap::new(),
                 ctx: switch_ctx,
                 mm,
@@ -796,8 +791,8 @@ impl Process {
         ));
 
         let weak = Arc::downgrade(&child);
-        parent.lock().children.insert(key, child);
-        weak
+        self.children.insert(key, child);
+        (weak, key)
     }
 
     pub fn exec(&mut self, elf: &[u8]) -> Result<(), &'static str> {

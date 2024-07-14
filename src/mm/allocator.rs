@@ -81,7 +81,12 @@ impl PhysFrame {
 
 impl Drop for PhysFrame {
     fn drop(&mut self) {
-        FRAME_ALLOCATOR.exclusive_access().dealloc(self.ppn);
+        let kernel_end_ppn: PhysPage = PhysAddr::from(ALLOCATOR_START).into();
+        if self.ppn < kernel_end_ppn {
+            KERNEL_FRAME_ALLOCATOR.exclusive_access().dealloc(self.ppn)
+        } else {
+            FRAME_ALLOCATOR.exclusive_access().dealloc(self.ppn);
+        }
     }
 }
 
@@ -90,7 +95,9 @@ pub fn frame_alloc() -> Option<PhysFrame> {
 }
 
 pub fn kernel_frame_alloc() -> Option<PhysFrame> {
-    KERNEL_FRAME_ALLOCATOR.exclusive_access().alloc()
+    let frame = KERNEL_FRAME_ALLOCATOR.exclusive_access().alloc()?;
+    frame.ppn.clear_page();
+    Some(frame)
 }
 
 pub struct AsidAllocator {
