@@ -12,6 +12,5 @@ fn main() -> i32 {
         if i % 1_000_000_000 == 0 {
             println!("Hello, world! +++++ 1 ++++ number {}", i);
         }
-        ffos_app::syscall::sys_nanosleep(1_000_000_000);
     }
 }
