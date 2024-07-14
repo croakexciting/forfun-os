@@ -64,4 +64,10 @@ createfs:
 kill:
 	@pkill -f qemu-system-riscv
 
-.PHONY: build clean run kill gdbclient createfs
+docker_start:
+	@bash scripts/start_docker.sh
+
+docker_into:
+	@docker exec -it ffos_dev bash
+
+.PHONY: build clean run kill gdbclient createfs docker_start docker_into
