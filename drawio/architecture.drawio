@@ -1,0 +1,67 @@
+<mxfile host="65bd71144e">
+    <diagram id="wRAiSJHT-GZo48bfgJ7D" name="Page-1">
+        <mxGraphModel dx="843" dy="542" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="2" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;dashed=1;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="400" width="640" height="320" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" value="kernel" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="115" y="390" width="50" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="4" value="&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#000000&quot;&gt;Arch-related features (linker scripts, entry assembly...)&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffcc99;strokeColor=#36393d;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="160" y="660" width="320" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#000000&quot;&gt;Memory Manager (PageTable, Phys Frame Allocator, Virtual Address Allocator, MemoryArea, Memory Manager for process)&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cce5ff;strokeColor=#36393d;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="160" y="600" width="560" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="6" value="&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#000000&quot;&gt;Board-related (Not used now)&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffcc99;strokeColor=#36393d;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="500" y="660" width="220" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="8" value="RUSTSBI/Bootloader" style="rounded=0;whiteSpace=wrap;html=1;labelBackgroundColor=none;fontSize=10;fontColor=#000000;fillColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="740" width="640" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="9" value="&lt;font style=&quot;font-size: 10px;&quot; color=&quot;#000000&quot;&gt;Process Manager (TCB)&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#cdeb8b;strokeColor=#36393d;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="160" y="540" width="560" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="10" value="&lt;font color=&quot;#000000&quot; style=&quot;font-size: 10px;&quot;&gt;Scheduler (Task Switch, Round-robin)&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="480" width="220" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="17" style="edgeStyle=none;html=1;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=10;fontColor=#FFFFFF;" parent="1" source="11" target="16" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="18" style="edgeStyle=none;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontSize=10;fontColor=#FFFFFF;" parent="1" source="11" target="10" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="11" value="Interrupt&lt;br style=&quot;font-size: 10px;&quot;&gt;&amp;amp; Trap Handler" style="rounded=0;whiteSpace=wrap;html=1;labelBackgroundColor=none;fontSize=10;fontColor=#ffffff;fillColor=#008a00;strokeColor=#005700;" parent="1" vertex="1">
+                    <mxGeometry x="160" y="420" width="50" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="14" value="Timer&amp;nbsp;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=10;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="210" y="495" width="50" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="15" value="IPC (sem, pipe, signal, shared memory...)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#0050ef;strokeColor=#001DBC;fontSize=10;fontColor=#ffffff;" parent="1" vertex="1">
+                    <mxGeometry x="500" y="480" width="220" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="16" value="syscall handler" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#6a00ff;strokeColor=#3700CC;fontSize=10;fontColor=#ffffff;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="420" width="460" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="19" value="Trap" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=10;fontColor=#FFFFFF;" parent="1" vertex="1">
+                    <mxGeometry x="215" y="415" width="40" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="20" value="Filesystem in user env" style="rounded=0;whiteSpace=wrap;html=1;labelBackgroundColor=none;fontSize=10;fontColor=#ffffff;fillColor=#60a917;strokeColor=#2D7600;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="320" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="21" value="Shell in user env" style="rounded=0;whiteSpace=wrap;html=1;labelBackgroundColor=none;fontSize=10;fontColor=#ffffff;fillColor=#60a917;strokeColor=#2D7600;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="320" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="22" value="APP1" style="rounded=0;whiteSpace=wrap;html=1;labelBackgroundColor=none;fontSize=10;fontColor=#ffffff;fillColor=#60a917;strokeColor=#2D7600;" parent="1" vertex="1">
+                    <mxGeometry x="440" y="320" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="23" value="APPn" style="rounded=0;whiteSpace=wrap;html=1;labelBackgroundColor=none;fontSize=10;fontColor=#ffffff;fillColor=#60a917;strokeColor=#2D7600;" parent="1" vertex="1">
+                    <mxGeometry x="600" y="320" width="120" height="60" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

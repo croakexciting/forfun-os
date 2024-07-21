@@ -12,6 +12,7 @@ const SYSCALL_LSEEK: usize = 4;
 const SYSCALL_MMAP: usize = 9;
 const SYSCALL_UMMAP: usize = 10;
 const SYSCALL_MMAP_WITH_ADDR: usize = 11;
+const SYSCALL_SIG: usize = 12;
 const SYSCALL_SIGACTION: usize = 13;
 const SYSCALL_SIGPROCMASK: usize = 14;
 const SYSCALL_SIGRETURN: usize = 15;
@@ -91,6 +92,10 @@ pub fn sys_wait(pid: usize) -> isize {
 
 pub fn sys_create_pipe(fd: &mut [usize]) -> isize {
     syscall(SYSCALL_PIPE, [fd.as_mut_ptr() as usize, 0, 0, 0])
+}
+
+pub fn sys_sig(pid: usize, signal: usize) -> isize {
+    syscall(SYSCALL_SIG, [pid, signal, 0, 0])
 }
 
 pub fn sys_sigaction(signal: usize, handler: usize) -> isize {

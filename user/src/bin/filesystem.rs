@@ -15,6 +15,7 @@ use rcore_fs::vfs::FileSystem;
 
 const CREATE_FILE_SERVER: &'static str = "create_file\0";
 const READ_FILE_SERVER: &'static str = "read_file\0"; 
+const GET_FILELEN_SERVER: &'static str = "get_filelen\0";
 
 pub struct BlkDevice {
     fd: Mutex<usize>,
@@ -97,6 +98,13 @@ fn read_file(sfs: Arc<SimpleFileSystem>, name: &str) -> Result<Vec<u8>> {
     Ok(data)
 }
 
+fn get_filelen(sfs: Arc<SimpleFileSystem>, name: &str) -> Result<usize> {
+    let root = sfs.root_inode();
+    let file = root.find(name)?;
+    let meta = file.metadata()?;
+    Ok(meta.size)
+}
+
 #[no_mangle]
 fn main() -> i32 {
     let sfs: Arc<SimpleFileSystem> = {
@@ -116,6 +124,7 @@ fn main() -> i32 {
     elf_load_test(sfs.clone(), "shell").expect("load shell failed");
     sys_create_server(&CREATE_FILE_SERVER);
     sys_create_server(&READ_FILE_SERVER);
+    sys_create_server(&GET_FILELEN_SERVER);
 
     let mut rcv_buf: vec::Vec<u8> = vec![0; 256];
     let mut rcv_len: usize = 0;
@@ -139,6 +148,27 @@ fn main() -> i32 {
             let msg = core::str::from_utf8(&rcv_buf.as_slice()[0..rcv_len]).unwrap();
             let data = read_file(sfs.clone(), msg).expect("read file content error");
             sys_reply_server(rcvid as usize, data.as_slice());
+        }
+
+        let rcvid = sys_recv_server(
+            &GET_FILELEN_SERVER, 
+            rcv_buf.as_mut_ptr(),
+            &mut rcv_len,
+            10
+        );
+        if rcvid >= 0 {
+            let msg = core::str::from_utf8(&rcv_buf.as_slice()[0..rcv_len]).unwrap();
+            let mut _ret: isize = 0;
+            match get_filelen(sfs.clone(), msg) {
+                Ok(size) => {
+                    _ret = size as isize;
+                }
+                Err(_) => {
+                    _ret = -1;
+                }                
+            }
+
+            sys_reply_server(rcvid as usize, _ret.to_ne_bytes().as_slice());
         }
     };
 }

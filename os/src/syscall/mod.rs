@@ -9,6 +9,7 @@ const SYSCALL_LSEEK: usize = 4;
 const SYSCALL_MMAP: usize = 9;
 const SYSCALL_UMMAP: usize = 10;
 const SYSCALL_MMAP_WITH_ADDR: usize = 11;
+const SYSCALL_SIG: usize = 12;
 const SYSCALL_SIGACTION: usize = 13;
 const SYSCALL_SIGPROCMASK: usize = 14;
 const SYSCALL_SIGRETURN: usize = 15;
@@ -50,6 +51,7 @@ pub fn syscall(id: usize, args: [usize; 4]) -> isize {
         SYSCALL_MMAP => sys_mmap(args[0] as usize, args[1] as usize),
         SYSCALL_UMMAP => sys_ummap(args[0]),
         SYSCALL_MMAP_WITH_ADDR => sys_mmap_with_addr(args[0], args[1], args[2]),
+        SYSCALL_SIG => sys_set_signal(args[0], args[1]),
         SYSCALL_SIGACTION => sys_sigaction(args[0], args[1]),
         SYSCALL_SIGPROCMASK => sys_set_signalmask(args[0]),
         SYSCALL_SIGRETURN => sys_sigreturn(),
