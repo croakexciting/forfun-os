@@ -224,7 +224,8 @@ impl TaskManager {
 
     pub fn set_signalmask(&self, signal: usize) -> isize {
         let mut inner = self.inner_access();
-        inner.set_signalmask(signal)
+        let sf = SignalFlags::from_bits_truncate(signal as u32);
+        inner.set_signalmask(sf)
     }
 
     pub fn signal_handler(&self) -> SignalCode {
@@ -411,6 +412,7 @@ impl AppManagerInner {
         }
         println!("[kernel] initproc load elf success");
         let initproc_arc = Arc::new(Mutex::new(initproc));
+        initproc_arc.lock().set_signalmask(SignalFlags::SIGINT);
         self.tasks.push(Arc::downgrade(&initproc_arc));
         self.initproc = Some(initproc_arc);
         0
@@ -518,7 +520,7 @@ impl AppManagerInner {
         -1
     }
 
-    pub fn set_signalmask(&mut self, mask: usize) -> isize {
+    pub fn set_signalmask(&mut self, mask: SignalFlags) -> isize {
         self.current_task(true).unwrap().lock().set_signalmask(mask)
     }
 
@@ -962,8 +964,8 @@ impl Process {
         0
     }
 
-    pub fn set_signalmask(&mut self, mask: usize) -> isize {
-        self.signals_mask = SignalFlags::from_bits_truncate(mask as u32);
+    pub fn set_signalmask(&mut self, mask: SignalFlags) -> isize {
+        self.signals_mask |= mask;
 
         0
     }

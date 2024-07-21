@@ -7,6 +7,7 @@ edition = "2021"
 buddy_system_allocator = "0.6"
 rcore-fs = { git = "https://github.com/rcore-os/rcore-fs.git" }
 rcore-fs-sfs = { git = "https://github.com/rcore-os/rcore-fs.git" }
+bitflags = "2.5.0"
 spin = "0.9"
 
 [profile.release]

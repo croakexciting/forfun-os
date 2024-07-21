@@ -40,6 +40,10 @@ pub fn sys_sigreturn() -> isize {
     0
 }
 
+pub fn sys_set_signal(pid: usize, signal: usize) -> isize {
+    set_signal(Some(pid), signal)
+}
+
 pub fn sys_getpid() -> isize {
     getpid() as isize
 }
