@@ -39,6 +39,9 @@ make docker_start
 
 make docker_into
 
+// create fs
+make createfs
+
 make run
 
 # stop kernel

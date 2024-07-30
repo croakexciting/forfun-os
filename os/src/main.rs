@@ -71,6 +71,7 @@ pub fn os_main(_hart_id: usize, _dts: usize) -> ! {
     println!("[kernel] hart id is: {}, dts addr is {:#x}", _hart_id, _dts);
     clear_bss();
     init_heap();
+    driver::dts::parse_dt(_dts);
     trap::init();
     trap::enable_timer_interrupt();
     timer::set_trigger();
