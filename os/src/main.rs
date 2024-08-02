@@ -70,6 +70,7 @@ pub fn init_heap() {
 pub fn os_main() -> ! {
     clear_bss();
     init_heap();
+    board::board_init();
     trap::init();
     trap::enable_timer_interrupt();
     timer::set_trigger();

@@ -80,6 +80,9 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
             println!("[kernel] IllegalInstruction in application, kernel killed it.");
             set_signal(None, SIGILL);
         }
+        Trap::Interrupt(Interrupt::SupervisorExternal) => {
+            crate::board::irq_handler();
+        }
         _ => {
             panic!(
                 "Unsupported trap {:?}, stval = {:#x}",
