@@ -37,7 +37,7 @@ pub struct MemoryManager {
     buddy_alloctor: Option<BuddyAllocator>,
 
     _kernel_area: MapArea,
-    _device_area: MapArea,
+    _device_area: Vec<MapArea>,
     _dma_area: MapArea,
 }
 
@@ -75,6 +75,19 @@ impl MemoryManager {
 
         device_area.map(&mut pt);
 
+        let mut plic_area = MapArea::new(
+            VirtAddr::from(0xC00_0000),
+            VirtAddr::from(0xC40_0000), 
+            MapType::Identical,
+            Permission::R | Permission::W | Permission::X
+        );
+
+        plic_area.map(&mut pt);
+
+        let mut d_areas: Vec<MapArea> = Vec::new();
+        d_areas.push(device_area);
+        d_areas.push(plic_area);
+
         let mut dma_area = MapArea::new(
             VirtAddr::from(0x8700_0000), 
             VirtAddr::from(0x8800_0000), 
@@ -91,7 +104,7 @@ impl MemoryManager {
             app_areas,
             buddy_alloctor: None,
             _kernel_area: kernel_area,
-            _device_area: device_area,
+            _device_area: d_areas,
             _dma_area: dma_area,
         }
     }

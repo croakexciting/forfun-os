@@ -57,6 +57,7 @@ impl PLIC {
         unsafe { reg_ptr.write_volatile(reg_ptr.read_volatile() | 1u32 << shift); }
     }
 
+    #[allow(unused)]
     pub fn disable(&self, hart_id: usize, level: Level, interrupt_id: usize) {
         let (reg_ptr, shift) = self.enable_ptr(hart_id, level, interrupt_id);
         unsafe { reg_ptr.write_volatile(reg_ptr.read_volatile() & (!(1u32 << shift))); }
@@ -67,6 +68,7 @@ impl PLIC {
         unsafe { ptr.write_volatile(threshold); }
     }
 
+    #[allow(unused)]
     pub fn get_threshold(&self, hart_id: usize, level: Level) -> u32 {
         let ptr = self.threshold_ptr(hart_id, level);
         unsafe { ptr.read_volatile() & 0x7 }

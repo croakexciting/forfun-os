@@ -41,8 +41,26 @@ pub fn enable_timer_interrupt() {
     }
 }
 
+#[allow(unused)]
+pub fn enable_interrupt() {
+    unsafe {
+        sie::set_sext();
+        sie::set_stimer();
+    }
+}
+
+#[allow(unused)]
+pub fn disable_interrupt() {
+    unsafe {
+        sie::clear_sext();
+        sie::clear_stimer();
+    }
+}
+
 #[no_mangle]
 pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
+    // disable_interrupt();
+
     let scause = scause::read();
     let stval = stval::read();
     match scause.cause() {
@@ -108,5 +126,6 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
         }
     }
 
+    // enable_interrupt();
     ctx
 }

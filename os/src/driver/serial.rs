@@ -32,5 +32,6 @@ pub fn console_putchar(c: char) {
 
 pub fn console_getchar() -> usize {
     #[allow(deprecated)]
-    sbi_rt::legacy::console_getchar()
+    // sbi_rt::legacy::console_getchar()
+    0
 }
