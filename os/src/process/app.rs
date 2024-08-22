@@ -15,11 +15,12 @@ use crate::ipc::semaphore::Semaphore;
 use crate::ipc::shm::Shm;
 use crate::mm::allocator::{asid_alloc, AisdHandler};
 use crate::mm::area::UserBuffer;
-use crate::mm::basic::{PhysAddr, VirtAddr, VirtPage, PAGE_SIZE};
+use crate::arch::memory::page::{enable_va, PhysAddr, VirtAddr, VirtPage, PAGE_SIZE};
 use crate::mm::MemoryManager;
-use crate::process::switch::__switch;
-use crate::trap::context::TrapContext;
-use crate::utils::timer::nanoseconds;
+use crate::arch::context::__switch;
+use crate::arch::context::TrapContext;
+use crate::arch::context::SwitchContext;
+use crate::board::timer::nanoseconds;
 use crate::utils::type_extern::RefCellWrap;
 
 use alloc::borrow::ToOwned;
@@ -30,9 +31,7 @@ use bitflags::Flags;
 use spin::mutex::Mutex;
 use alloc::{format, vec};
 use alloc::vec::Vec;
-use riscv::register::satp;
 
-use super::context::SwitchContext;
 use super::pid::{self, PidHandler};
 use crate::ipc::signal::{self, SignalAction, SignalFlags, SIG_NUM};
 
@@ -765,7 +764,7 @@ impl Process {
     pub fn fork(&mut self) -> (Weak<Mutex<Self>>, usize) {
         let mut mm = MemoryManager::new();
         mm.fork(&mut self.mm);
-        let switch_ctx = SwitchContext::new_with_restore_addr_and_sp();
+        let switch_ctx = SwitchContext::new_with_restore_addr_and_kernel_stack_sp(crate::mm::KERNEL_STACK_START);
         let pid = pid::alloc().unwrap();
         let key = pid.0;
         let tick = self.tick;
@@ -840,10 +839,6 @@ impl Process {
         self.ctx.borrow_mut() as *mut _
     }
     
-    fn satp(&mut self) -> usize {
-        8usize << 60 | (self.asid.0 as usize) << 44 | self.mm.root_ppn().0
-    }
-
     pub fn load_elf(&mut self, data: &[u8]) -> Result<(), &'static str> {
         // 解析 elf 文件到 mm 中
         // 请注意，这里的 sp 是用户栈 sp，而不是 app 对应的内核栈的 app
@@ -878,11 +873,7 @@ impl Process {
 
     // 使能虚地址模式，并且将该进程的页表写到 satp 中
     pub fn activate(&mut self) {
-        let satp: usize = self.satp();
-        unsafe {
-            satp::write(satp);
-            asm!("sfence.vma");
-        }
+        enable_va(self.asid.0 as usize, self.mm.root_ppn().0)
     }
 
     // 出现页错误时，copy on write

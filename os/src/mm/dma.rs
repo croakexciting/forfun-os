@@ -1,11 +1,10 @@
 // dma 区域主要是为了 virtio，暂定物理内存位置为 0x87000000 ~ 0x88000000 16M
 
 use crate::utils::type_extern::RefCellWrap;
-
-use super::{
-    basic::{PhysPage, PhysAddr, VirtAddr, VirtPage, PAGE_SIZE}, 
-    buddy::BuddyAllocator
+use crate::arch::memory::page::{
+    PhysPage, PhysAddr, VirtAddr, VirtPage, PAGE_SIZE
 };
+use super::buddy::BuddyAllocator;
 use lazy_static::*;
 
 const DMA_START_ADDR: usize = 0x8700_0000;

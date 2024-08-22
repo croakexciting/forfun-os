@@ -4,9 +4,9 @@ use alloc::vec::Vec;
 use crate::mm::{
     allocator::{frame_alloc, PhysFrame}, 
     area::Permission, 
-    basic::{PhysPage, VirtPage}, 
     MemoryManager
 };
+use crate::arch::memory::page::{PhysPage, VirtPage};
 
 pub struct Shm {
     pub users: Vec<usize>,

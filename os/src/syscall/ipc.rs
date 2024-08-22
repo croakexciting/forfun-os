@@ -1,10 +1,10 @@
 use alloc::sync::Arc;
 
 use crate::{
-    arch::riscv64::{
+    arch::memory::copy::{
         copy_from_user_into_vector, 
         copy_vector_to_user, 
-        str_from_user,
+        copy_str_with_user,
         copy_usize_with_user
     }, 
     process::{
@@ -21,32 +21,32 @@ use crate::{
 };
 
 pub fn sys_shm_open(name: *const i8, size: usize, permission: usize) -> isize {
-    let str = str_from_user(name);
+    let str = copy_str_with_user(name);
     shm_open(str, size, permission)
 }
 
 pub fn sys_sem_open(name: *const i8) -> isize {
-    let str = str_from_user(name);
+    let str = copy_str_with_user(name);
     sem_open(str)
 }
 
 pub fn sys_sem_wait(name: *const i8) -> isize {
-    let str = str_from_user(name);
+    let str = copy_str_with_user(name);
     sem_wait(str)
 }
 
 pub fn sys_sem_raise(name: *const i8) -> isize {
-    let str = str_from_user(name);
+    let str = copy_str_with_user(name);
     sem_raise(str)
 }
 
 pub fn sys_create_server(name: *const i8) -> isize {
-    let str = str_from_user(name);
+    let str = copy_str_with_user(name);
     create_server(str)
 }
 
 pub fn sys_connect_server(name: *const i8) -> isize {
-    let str = str_from_user(name);
+    let str = copy_str_with_user(name);
     connect_server(str)
 }
 
@@ -62,7 +62,7 @@ pub fn sys_request(coid: usize, req: *const u8, req_len: usize, resp: *mut u8) -
 }
 
 pub fn sys_recv_request(name: *const i8, req: *mut u8, req_len: *mut usize, timeout_ms: usize) -> isize {
-    let str = str_from_user(name);
+    let str = copy_str_with_user(name);
     if let Some(req_data) = recv_request(str, timeout_ms) {
         // 确保数据在内核堆中已经被丢弃释放
         let raw_vec = Arc::try_unwrap(req_data.1).unwrap();

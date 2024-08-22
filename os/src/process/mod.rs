@@ -10,8 +10,9 @@ use app::*;
 use spin::mutex::Mutex;
 
 use crate::{
-    mm::{area::UserBuffer, basic::VirtAddr},
+    mm::area::UserBuffer,
     utils::type_extern::RefCellWrap,
+    arch::memory::page::VirtAddr
 };
 
 use lazy_static::*;

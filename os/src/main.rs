@@ -6,6 +6,7 @@
 #![feature(const_slice_from_raw_parts_mut)]
 
 mod arch;
+mod board;
 mod sbi;
 
 #[macro_use]
@@ -18,14 +19,11 @@ mod mm;
 mod process;
 mod syscall;
 
-#[cfg(feature = "riscv_qemu")]
-#[path = "board/riscv_qemu.rs"]
-mod board;
-
 extern crate alloc;
+use arch::irq;
 use linked_list_allocator::LockedHeap;
 use process::{create_proc, run_tasks};
-use utils::timer;
+use crate::board::timer;
 
 fn clear_bss() {
     extern "C" {
@@ -69,8 +67,7 @@ pub fn init_heap() {
 pub fn os_main() -> ! {
     clear_bss();
     init_heap();
-    // trap::init();
-    // trap::enable_timer_interrupt();
+    irq::init();
     timer::set_trigger();
     create_proc();
     run_tasks();

@@ -1,4 +1,14 @@
-use crate::{ipc::signal::{SignalFlags, SIGILL, SIGSEGV}, println, process::{app::SignalCode, back_to_idle, cow, exit, save_trap_ctx, set_signal, signal_handler}, utils::timer::set_trigger};
+use crate::{
+    ipc::signal::{SIGILL, SIGSEGV}, 
+    println, 
+    process::{
+        app::SignalCode, 
+        back_to_idle, cow, exit, 
+        save_trap_ctx, set_signal, 
+        signal_handler
+    },
+    board::timer::set_trigger,
+};
 
 use super::context::TrapContext;
 

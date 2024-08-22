@@ -3,10 +3,9 @@
 use core::borrow::BorrowMut;
 
 use alloc::vec::Vec;
-use riscv::register;
-use super::{
-    allocator::{kernel_frame_alloc, PhysFrame}, 
-    basic::{PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage}
+use super::allocator::{kernel_frame_alloc, PhysFrame};
+use crate::arch::memory::page::{
+    root_ppn, PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage
 };
 
 // Every app has it's own page table
@@ -192,7 +191,7 @@ impl Iterator for PageTable {
 }
 
 pub fn translate(va: VirtAddr) -> Option<PhysAddr> {
-    let ppn = register::satp::read().ppn();
+    let ppn = root_ppn();
     let pt = PageTable::new_with_ppn(ppn);
     pt.translate(va)
 }

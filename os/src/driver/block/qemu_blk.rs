@@ -1,7 +1,6 @@
 use core::ptr::NonNull;
 
 use alloc::string::{String, ToString};
-use riscv::register;
 use virtio_drivers::{
     device::blk::VirtIOBlk, 
     transport::{
@@ -99,7 +98,7 @@ unsafe impl Hal for HalImpl {
     }
 
     unsafe fn share(buffer: NonNull<[u8]>, _direction: BufferDirection) -> PhysAddr {
-        let ppn = register::satp::read().ppn();
+        let ppn = crate::arch::memory::page::root_ppn();
         if ppn == 0 {
             buffer.as_ptr() as *mut u8 as PhysAddr
         } else {

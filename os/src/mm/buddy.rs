@@ -2,8 +2,7 @@ use alloc::{
     sync::Arc, vec::Vec, vec
 };
 use spin::mutex::Mutex;
-
-use super::basic::VirtPage;
+use crate::arch::memory::page::VirtPage;
 
 #[derive(Clone)]
 pub struct BuddyAllocator {

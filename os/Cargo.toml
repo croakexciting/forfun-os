@@ -17,10 +17,10 @@ virtio-drivers = "0.7.3"
 uart16550 = "0.0.1"
 
 [features]
-default = ["riscv_qemu"]
+default = ["riscv64_qemu"]
 
 # board select
-riscv_qemu = ["riscv64"]
+riscv64_qemu = ["riscv64"]
 k210 = ["riscv64"]
 
 # cpu select
