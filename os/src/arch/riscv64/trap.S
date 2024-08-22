@@ -33,9 +33,9 @@ __alltraps:
     # read user stack from sscratch and save it on the kernel stack
     csrr t2, sscratch
     sd t2, 2*8(sp)
-    # set input argument of trap_handler(cx: &mut TrapContext)
+    # set input argument of riscv64_trap_handler(cx: &mut TrapContext)
     mv a0, sp
-    call trap_handler
+    call riscv64_trap_handler
 
 __restore:
     # case1: start running app by __restore

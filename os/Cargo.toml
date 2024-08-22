@@ -18,8 +18,13 @@ uart16550 = "0.0.1"
 
 [features]
 default = ["riscv_qemu"]
-riscv_qemu = []
-k210 = []
+
+# board select
+riscv_qemu = ["riscv64"]
+k210 = ["riscv64"]
+
+# cpu select
+riscv64 = []
 
 [profile.release]
 debug = true

@@ -1,31 +1,28 @@
 #![allow(unused)]
 
 pub mod app;
-pub mod switch;
-pub mod context;
 pub mod pid;
 
 use core::usize;
 
-use app::*;
 use alloc::{string::String, sync::Arc, vec::Vec};
+use app::*;
 use spin::mutex::Mutex;
 
 use crate::{
-    mm::{area::UserBuffer, basic::VirtAddr}, trap::context::TrapContext, utils::type_extern::RefCellWrap
+    mm::{area::UserBuffer, basic::VirtAddr},
+    utils::type_extern::RefCellWrap,
 };
 
 use lazy_static::*;
 
 lazy_static! {
-    static ref TASK_MANAGER: Arc<TaskManager> = unsafe {
-        Arc::new(TaskManager::new())
-    };
+    static ref TASK_MANAGER: Arc<TaskManager> = unsafe { Arc::new(TaskManager::new()) };
 }
 
 // Default create the first app, other app created by manual
 pub fn create_proc() -> isize {
-    let elf = unsafe { core::slice::from_raw_parts(0x8100_0000 as *mut u8, 4096*100)};
+    let elf = unsafe { core::slice::from_raw_parts(0x8100_0000 as *mut u8, 4096 * 100) };
     TASK_MANAGER.create_initproc(5, elf)
 }
 
@@ -80,7 +77,7 @@ pub fn open(name: String) -> isize {
 
 pub fn lseek(fd: usize, seek: usize) -> isize {
     TASK_MANAGER.lseek(fd, seek)
-} 
+}
 
 pub fn sigaction(signal: usize, handler: usize) -> isize {
     TASK_MANAGER.sigaction(signal, handler)
