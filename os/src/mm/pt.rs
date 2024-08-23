@@ -1,8 +1,9 @@
 // page table manager
 
-use core::borrow::BorrowMut;
+use core::borrow::{Borrow, BorrowMut};
 
 use alloc::vec::Vec;
+use riscv::register::fcsr::read;
 use super::allocator::{kernel_frame_alloc, PhysFrame};
 use crate::arch::memory::page::{
     root_ppn, PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage
@@ -46,7 +47,7 @@ impl PageTable {
         for (k, v) in idx.iter().enumerate() {
             // TODO: 需要考虑下如何在虚地址模式下访问页表
             let pte = ppn.pte_array()[*v].borrow_mut();
-            if k == 2 {
+            if k == (idx.len() - 1) {
                 // 从叶子页表中获得了 PTE，直接返回
                 return Some(pte)
             } else {
@@ -78,6 +79,30 @@ impl PageTable {
             }
             ppn = pte.ppn();
         }
+        None
+    }
+
+    pub fn find_pte_with_level(&mut self, vpn: VirtPage, level: usize, readonly: bool) -> Option<&mut PageTableEntry> {
+        let idx = vpn.index();
+        let mut ppn = self.root;
+        for (k, v) in idx.iter().enumerate() {
+            let pte = ppn.pte_array()[*v].borrow_mut();
+            if k == level {
+                return Some(pte);
+            } else {
+                if !pte.is_valid() {
+                    if readonly {
+                        return  None;
+                    } else {
+                        let frame = kernel_frame_alloc().unwrap();
+                        *pte = PageTableEntry::new(frame.ppn, PTEFlags::V);
+                    }
+                }                
+            }
+
+            ppn = pte.ppn();
+        }
+
         None
     }
 
@@ -128,6 +153,12 @@ impl PageTable {
         let old_pte = pte.clone();
         *pte = new_pte;
         Some(old_pte)
+    }
+
+    pub fn set_pte_with_level(&mut self, ppn: PhysPage, vpn: VirtPage, level: usize) -> Option<PageTableEntry> {
+        let pte = self.find_pte_with_level(vpn, level, false)?;
+        *pte = PageTableEntry::new(ppn, PTEFlags::V);
+        Some(pte.clone())
     }
 
     pub fn root_ppn(&self) -> PhysPage {

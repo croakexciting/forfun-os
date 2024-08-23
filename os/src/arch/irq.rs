@@ -45,7 +45,7 @@ pub fn irq_handler(ctx: &mut TrapContext) -> &mut TrapContext {
             set_signal(None, SIGILL);
         }
         IrqCause::External => {
-            // TODO: call hardware interrupt at here
+            crate::board::external_irq_handler();
         }
     }
 

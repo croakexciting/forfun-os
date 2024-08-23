@@ -185,6 +185,7 @@ impl VirtPage {
     }
 }
 
+// TODO: pte struct need set in arch/specific_cpu, it's not general
 bitflags! {
     #[derive(Clone, Copy)]
     pub struct PTEFlags: u8 {

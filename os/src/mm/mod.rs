@@ -4,6 +4,7 @@ pub mod area;
 pub mod elf;
 pub mod buddy;
 pub mod dma;
+pub mod peripheral;
 
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
@@ -36,10 +37,9 @@ pub struct MemoryManager {
     app_areas: Vec<Arc<RwLock<MapArea>>>,
     // 堆可用区域，左闭右开的集合
     buddy_alloctor: Option<BuddyAllocator>,
+    kernel_pte: usize,
 
-    _kernel_area: MapArea,
-    _device_area: MapArea,
-    _dma_area: MapArea,
+    _kernel_area: Vec<MapArea>,
 }
 
 impl MemoryManager {
@@ -47,6 +47,12 @@ impl MemoryManager {
         let mut pt = PageTable::new();
 
         // default map all kernel space
+        /*
+            TODO：如果每个进程的页表都管理一套 kernel area，相当浪费内存
+            计划是在 0 级（最高级）页表上留一个页表项指向一个 1 级页表
+            这个页表存储 kernel pte，每个进程 0 级页表均指向它，这样实现了 kernel pte 共享
+            一个一级页表可以指向 1G 内存，内核空间也够用，kernel 和外设地址都放在这里
+         */
         let mut kernel_area = MapArea::new(
             KERNEL_START_ADDR.into(), 
             KERNEL_END_ADDR.into(), 
@@ -76,6 +82,8 @@ impl MemoryManager {
 
         device_area.map(&mut pt);
 
+        // dma 需要实际内存，在嵌入式中，内存空间地址不一定可以到 0x8700_0000
+        // TODO，dma 需要提供一个初始化函数，供设置内存范围
         let mut dma_area = MapArea::new(
             VirtAddr::from(0x8700_0000), 
             VirtAddr::from(0x8800_0000), 
@@ -85,15 +93,15 @@ impl MemoryManager {
         dma_area.map(&mut pt);
 
         let app_areas: Vec<Arc<RwLock<MapArea>>> = Vec::with_capacity(8);
+        let _kernel_area = Vec::new();
         
         Self {
             pt,
             kernel_stack_area, 
             app_areas,
             buddy_alloctor: None,
-            _kernel_area: kernel_area,
-            _device_area: device_area,
-            _dma_area: dma_area,
+            kernel_pte: 0,
+            _kernel_area,
         }
     }
 
@@ -318,5 +326,20 @@ impl MemoryManager {
         } else {
             -1
         }
+    }
+
+    pub fn create_kernel_pt(&mut self) {
+        let mut kcode = MapArea::new(
+            KERNEL_START_ADDR.into(),
+            KERNEL_END_ADDR.into(),
+            MapType::Identical,
+            Permission::R | Permission::W | Permission::X
+        );
+
+        kcode.map(&mut self.pt);
+        self._kernel_area.push(kcode);
+
+        // TODO: get pte
+
     }
 }
