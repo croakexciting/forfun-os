@@ -257,9 +257,14 @@ impl TaskManager {
         inner.ummap(addr)
     }
 
-    pub fn mmap_with_addr(&self, pa: usize, size: usize, permission: usize) -> isize {
+    pub fn mmap_with_addr(&self, pa: usize, size: usize, permission: usize, user: bool) -> isize {
         let mut inner = self.inner.exclusive_access();
-        inner.mmap_with_addr(pa, size, permission)
+        inner.mmap_with_addr(pa, size, permission, user)
+    }
+
+    pub fn map_peripheral(&self, pa: usize, size: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        inner.map_peripheral(pa, size)
     }
 
     pub fn create_or_open_shm(&self, name: String, size: usize, permission: usize) -> isize {
@@ -552,8 +557,12 @@ impl AppManagerInner {
         self.current_task(true).unwrap().lock().ummap(addr.into())
     }
 
-    pub fn mmap_with_addr(&mut self, pa: usize, size: usize, permission: usize) -> isize {
-        self.current_task(true).unwrap().lock().mmap_with_addr(pa.into(), size, permission)
+    pub fn mmap_with_addr(&mut self, pa: usize, size: usize, permission: usize, user: bool) -> isize {
+        self.current_task(true).unwrap().lock().mmap_with_addr(pa.into(), size, permission, user)
+    }
+    
+    pub fn map_peripheral(&mut self, pa: usize, size: usize) -> isize {
+        self.current_task(true).unwrap().lock().map_peripheral(pa.into(), size)
     }
 
     pub fn create_or_open_shm(&mut self, name: String, pn: usize, permission: usize) -> isize {
@@ -1011,8 +1020,12 @@ impl Process {
         self.mm.umap_dyn_area(addr.into())
     }
 
-    pub fn mmap_with_addr(&mut self, pa: PhysAddr, size: usize, permission: usize) -> isize {
-        self.mm.mmap_with_addr(pa, size, permission)
+    pub fn mmap_with_addr(&mut self, pa: PhysAddr, size: usize, permission: usize, user: bool) -> isize {
+        self.mm.mmap_with_addr(pa, size, permission, user)
+    }
+
+    pub fn map_peripheral(&mut self, pa: PhysAddr, size: usize) -> isize {
+        self.mm.map_peripheral(pa, size, permission)
     }
 }
 

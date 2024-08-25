@@ -4,10 +4,18 @@ pub mod timer;
 #[path = "riscv64_qemu/mod.rs"]
 mod inner;
 
-pub fn board_init() {
-    inner::plic::board_init()
+use lazy_static::*;
+
+#[cfg(feature = "riscv64_qemu")]
+lazy_static! {
+    pub static ref 
 }
 
-pub fn external_irq_handler() {
-    inner::plic::external_irq_handler()
+pub fn console_putchar(c: char) {
+    inner::CONSOLE.exclusive_access().put(c);
+}
+
+pub fn console_getchar() -> usize {
+    #[allow(deprecated)]
+    sbi_rt::legacy::console_getchar()
 }

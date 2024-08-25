@@ -9,5 +9,5 @@ pub fn sys_ummap(addr: usize) -> isize {
 }
 
 pub fn sys_mmap_with_addr(pa: usize, size: usize, permission: usize) -> isize {
-    mmap_with_addr(pa, size, permission)
+    mmap_with_addr(pa, size, permission, true)
 }

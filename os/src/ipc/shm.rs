@@ -33,7 +33,7 @@ impl Shm {
 
     pub fn map(&mut self, pid: usize, mm: &mut MemoryManager) -> isize {
         self.users.push(pid);
-        mm.map_defined(self.ppns.borrow(), self.permission)
+        mm.map_defined(self.ppns.borrow(), self.permission, true)
     }
 
     pub fn unmap(&mut self, pid: usize, start_vpn: VirtPage, mm: &mut MemoryManager) -> isize {

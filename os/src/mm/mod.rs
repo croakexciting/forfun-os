@@ -9,6 +9,7 @@ pub mod peripheral;
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use area::{MapArea, Permission, MapType};
+use peripheral::peripheral_alloc;
 use crate::arch::memory::page::{
     PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage, PAGE_SIZE
 };
@@ -249,13 +250,16 @@ impl MemoryManager {
         Some(weak_ptr)
     }
 
-    pub fn mmap_with_addr(&mut self, pa: PhysAddr, size: usize, permission: usize) -> isize {
+    pub fn mmap_with_addr(&mut self, pa: PhysAddr, size: usize, permission: usize, user: bool) -> isize {
         assert_eq!(size % PAGE_SIZE, 0);
 
         let mut ppns: Vec<PhysPage> = Vec::new();
 
         let mut p = Permission::from_bits_truncate((permission as u8) << 1);
-        p.insert(Permission::U);
+
+        if user == true {
+            p.insert(Permission::U);
+        }
 
         for i in 0..(size/PAGE_SIZE) {
             let mut ppn: PhysPage = pa.into();
@@ -263,7 +267,7 @@ impl MemoryManager {
             ppns.push(ppn)
         }
 
-        self.map_defined(&ppns, p)
+        self.map_defined(&ppns, p, user)
     }
 
     pub fn umap_dyn_area(&mut self, start_vpn: VirtPage) -> isize {
@@ -279,7 +283,7 @@ impl MemoryManager {
         -1
     }
 
-    pub fn map_defined(&mut self, ppns: &Vec<PhysPage>, permission: Permission) -> isize {
+    pub fn map_defined(&mut self, ppns: &Vec<PhysPage>, permission: Permission, user: bool) -> isize {
         if let Some(vpns) = self.alloc(ppns.len()) {
             let mut new_area = MapArea::new(
                 vpns.0.into(), 
@@ -288,9 +292,43 @@ impl MemoryManager {
                 permission.clone()
             );
             new_area.map_defined(&mut self.pt, ppns);
-            let area_ptr = Arc::new(RwLock::new(new_area));
-            self.app_areas.push(area_ptr);
+            if user == true {
+                let area_ptr = Arc::new(RwLock::new(new_area));
+                self.app_areas.push(area_ptr);    
+            } else {
+                self._kernel_area.push(new_area);
+            }
             VirtAddr::from(vpns.0).0 as isize
+        } else {
+            -1
+        }
+    }
+
+    pub fn map_peripheral(&mut self, pa: PhysAddr, size: usize) -> isize {
+        let p = Permission::R | Permission::W;
+
+        let mut pn = size / PAGE_SIZE;
+        if (size % PAGE_SIZE) != 0 {
+            pn += 1;
+        }
+
+        let mut ppns: Vec<PhysPage> = Vec::with_capacity(pn);
+        let mut start_ppn: PhysPage = pa.into();
+        for _ in 0..pn {
+            ppns.push(start_ppn);
+            start_ppn = start_ppn.next();
+        }
+
+        if let Some(vpa_start) = peripheral_alloc(pn) {
+            let mut new_area = MapArea::new(
+                vpa_start.into(), 
+                (vpa_start + size).into(), 
+                MapType::Defined, 
+                p
+            );
+            new_area.map_defined(&mut self.pt, &ppns);
+            self._kernel_area.push(new_area);
+            vpa_start as isize
         } else {
             -1
         }

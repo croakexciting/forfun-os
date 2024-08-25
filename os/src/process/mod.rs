@@ -115,8 +115,12 @@ pub fn ummap(addr: usize) -> isize {
     TASK_MANAGER.ummap(addr)
 }
 
-pub fn mmap_with_addr(pa: usize, size: usize, permission: usize) -> isize {
-    TASK_MANAGER.mmap_with_addr(pa, size, permission)
+pub fn mmap_with_addr(pa: usize, size: usize, permission: usize, user: bool) -> isize {
+    TASK_MANAGER.mmap_with_addr(pa, size, permission, user)
+}
+
+pub fn map_peripheral(pa: usize, size: usize) -> isize {
+    TASK_MANAGER.map_peripheral(pa, size)
 }
 
 pub fn shm_open(name: String, size: usize, permission: usize) -> isize {
