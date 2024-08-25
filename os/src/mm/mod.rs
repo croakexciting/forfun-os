@@ -10,7 +10,7 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use area::{MapArea, Permission, MapType};
 use crate::arch::memory::page::{
-    PhysAddr, PhysPage, VirtAddr, VirtPage, PAGE_SIZE
+    PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage, PAGE_SIZE
 };
 use buddy::BuddyAllocator;
 use pt::PageTable;
@@ -21,12 +21,14 @@ use crate::arch::context::TrapContext;
 // 出于简单考虑，我第一步计划是将整个内存空间算作一个 map aera
 const KERNEL_START_ADDR: usize = 0x80200000;
 const KERNEL_END_ADDR: usize = 0x80400000;
-const KERNEL_STACK_SIZE: usize = 4096 * 8;
-// 暂定将内核栈固定在 0x9000000 这个虚拟地址，大小为 16KiB，其实地址范围是 [0x90000000 - 16KiB, 0x90000000}
-// 而且由于这一大段下面一直到内核空间都是无人使用的，相当于是一个保护页
-pub const KERNEL_STACK_START: usize = 0x90000000;
-const USER_STACK_START: usize = 0x80000000;
 
+// 暂定将内核栈固定在 0x8000000 这个虚拟地址，大小为 64KiB，其实地址范围是 [0x80000000 - 64KiB, 0x80000000}
+// 而且由于这一大段下面一直到内核空间都是无人使用的，相当于是一个保护页
+// TODO: kernel stack 需要 64KB，非常大，需要优化下看看为什么这么大
+pub const KERNEL_STACK_START: usize = 0x80000000;
+const KERNEL_STACK_SIZE: usize = 4096 * 16;
+
+pub const USER_STACK_START: usize = 0x7ff8_0000;
 // 用户栈大小暂固定为 8KiB
 const USER_STACK_SIZE: usize = 4096 * 2;
 
@@ -37,7 +39,7 @@ pub struct MemoryManager {
     app_areas: Vec<Arc<RwLock<MapArea>>>,
     // 堆可用区域，左闭右开的集合
     buddy_alloctor: Option<BuddyAllocator>,
-    kernel_pte: usize,
+    kernel_pte: PageTableEntry,
 
     _kernel_area: Vec<MapArea>,
 }
@@ -46,23 +48,6 @@ impl MemoryManager {
     pub fn new() -> Self {
         let mut pt = PageTable::new();
 
-        // default map all kernel space
-        /*
-            TODO：如果每个进程的页表都管理一套 kernel area，相当浪费内存
-            计划是在 0 级（最高级）页表上留一个页表项指向一个 1 级页表
-            这个页表存储 kernel pte，每个进程 0 级页表均指向它，这样实现了 kernel pte 共享
-            一个一级页表可以指向 1G 内存，内核空间也够用，kernel 和外设地址都放在这里
-         */
-        let mut kernel_area = MapArea::new(
-            KERNEL_START_ADDR.into(), 
-            KERNEL_END_ADDR.into(), 
-            MapType::Identical, 
-            Permission::R | Permission::W | Permission::X
-        );
-
-        kernel_area.map(&mut pt);
-
-        // 默认创建一个 8kib 的放置内核栈的 area，所以初始化 sp 可以设为 0x8FFFFFF0
         let mut kernel_stack_area = MapArea::new(
             (KERNEL_STACK_START- KERNEL_STACK_SIZE).into(), 
             (KERNEL_STACK_START).into(),
@@ -72,26 +57,6 @@ impl MemoryManager {
 
         kernel_stack_area.map(&mut pt);
 
-        // 将外设地址也 map 过去
-        let mut device_area = MapArea::new(
-            VirtAddr::from(0x1000_0000), 
-            VirtAddr::from(0x1001_0000), 
-            MapType::Identical,
-            Permission::R | Permission::W | Permission::X
-        );
-
-        device_area.map(&mut pt);
-
-        // dma 需要实际内存，在嵌入式中，内存空间地址不一定可以到 0x8700_0000
-        // TODO，dma 需要提供一个初始化函数，供设置内存范围
-        let mut dma_area = MapArea::new(
-            VirtAddr::from(0x8700_0000), 
-            VirtAddr::from(0x8800_0000), 
-            MapType::Identical,
-            Permission::R | Permission::W
-        );
-        dma_area.map(&mut pt);
-
         let app_areas: Vec<Arc<RwLock<MapArea>>> = Vec::with_capacity(8);
         let _kernel_area = Vec::new();
         
@@ -100,7 +65,7 @@ impl MemoryManager {
             kernel_stack_area, 
             app_areas,
             buddy_alloctor: None,
-            kernel_pte: 0,
+            kernel_pte: PageTableEntry(0),
             _kernel_area,
         }
     }
@@ -212,6 +177,9 @@ impl MemoryManager {
     }
 
     pub fn fork(&mut self, parent: &mut Self) {
+        // append kernel stack
+        self.add_kernel_pt(parent.kernel_pte);
+        
         // 将父进程的所有 app area 复制一份，通过智能指针来实现自动 drop
         self.app_areas.reserve(parent.app_areas.len());
         for area in parent.app_areas.iter_mut() {
@@ -328,7 +296,13 @@ impl MemoryManager {
         }
     }
 
-    pub fn create_kernel_pt(&mut self) {
+    /*
+        TODO：如果每个进程的页表都管理一套 kernel area，相当浪费内存
+        计划是在 0 级（最高级）页表上留一个页表项指向一个 1 级页表
+        这个页表存储 kernel pte，每个进程 0 级页表均指向它，这样实现了 kernel pte 共享
+        一个一级页表可以指向 1G 内存，内核空间也够用，kernel 和外设地址都放在这里
+    */
+    pub fn init_kernel_area(&mut self) -> Option<PageTableEntry> {
         let mut kcode = MapArea::new(
             KERNEL_START_ADDR.into(),
             KERNEL_END_ADDR.into(),
@@ -339,7 +313,42 @@ impl MemoryManager {
         kcode.map(&mut self.pt);
         self._kernel_area.push(kcode);
 
-        // TODO: get pte
+        // 暂时 dma 和外设地址还是恒等映射，后面要改成 map
+        let mut device_area = MapArea::new(
+            VirtAddr::from(0x1000_0000), 
+            VirtAddr::from(0x1001_0000), 
+            MapType::Identical,
+            Permission::R | Permission::W | Permission::X
+        );
 
+        device_area.map(&mut self.pt);
+        self._kernel_area.push(device_area);
+
+        let mut dma_area = MapArea::new(
+            VirtAddr::from(0x8700_0000), 
+            VirtAddr::from(0x8800_0000), 
+            MapType::Identical,
+            Permission::R | Permission::W
+        );
+        dma_area.map(&mut self.pt);
+        self._kernel_area.push(dma_area);
+
+        let pte = self.pt.find_pte_with_level(VirtAddr(KERNEL_START_ADDR).into(), 0, true)?;
+        self.kernel_pte = pte.clone();
+        Some(self.kernel_pte)
+    }
+
+    pub fn add_kernel_pt(&mut self, pte: PageTableEntry) -> Option<PageTableEntry> {
+        self.kernel_pte = pte;
+        let mut device_area = MapArea::new(
+            VirtAddr::from(0x1000_0000), 
+            VirtAddr::from(0x1001_0000), 
+            MapType::Identical,
+            Permission::R | Permission::W | Permission::X
+        );
+
+        device_area.map(&mut self.pt);
+        self._kernel_area.push(device_area);
+        self.pt.set_pte_with_level(pte, VirtAddr(KERNEL_START_ADDR).into(), 0)
     }
 }

@@ -10,9 +10,7 @@ use app::*;
 use spin::mutex::Mutex;
 
 use crate::{
-    mm::area::UserBuffer,
-    utils::type_extern::RefCellWrap,
-    arch::memory::page::VirtAddr
+    arch::memory::page::{VirtAddr, VirtPage}, mm::area::UserBuffer, utils::type_extern::RefCellWrap
 };
 
 use lazy_static::*;
@@ -53,7 +51,8 @@ pub fn back_to_idle() {
 }
 
 pub fn cow(va: usize) -> Result<(), &'static str> {
-    TASK_MANAGER.cow(VirtAddr::from(va).into())
+    let vpn: VirtPage = VirtAddr::from(va).into();
+    TASK_MANAGER.cow(vpn)
 }
 
 pub fn wait(pid: isize) -> isize {

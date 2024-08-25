@@ -403,11 +403,16 @@ impl AppManagerInner {
     pub fn create_initproc(&mut self, tick: usize, elf_data: &[u8]) -> isize {
         // just add a process at the tail
         let mut initproc = Process::new(tick);
+        // initialize kernel pt
+        if let None = initproc.mm.init_kernel_area() {
+            println!("[kernel] initproc create kernel pagetable failed");
+            return -1;
+        }
         // load elf
         let r = initproc.load_elf(elf_data);
         if let Err(e) = r {
             println!("[kernel] initproc load elf error: {}", e);
-            return -1;
+            return -2;
         }
         println!("[kernel] initproc load elf success");
         let initproc_arc = Arc::new(Mutex::new(initproc));

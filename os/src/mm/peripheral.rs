@@ -16,7 +16,7 @@ const PERIPHERAL_END_ADDR: usize = 0xA000_0000;
 lazy_static! {
     pub static ref PERIPHERAL_ALLOCATOR: RefCellWrap<BuddyAllocator> = unsafe {
         let start_ppn: PhysPage = PhysAddr::from(PERIPHERAL_START_ADDR).into();
-        let pn = (PERIPHERAL_START_ADDR - PERIPHERAL_END_ADDR) / PAGE_SIZE;
+        let pn = (PERIPHERAL_END_ADDR - PERIPHERAL_START_ADDR) / PAGE_SIZE;
 
         RefCellWrap::new(BuddyAllocator::new(5, start_ppn.0.into(), pn))
     };

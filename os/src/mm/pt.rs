@@ -155,10 +155,11 @@ impl PageTable {
         Some(old_pte)
     }
 
-    pub fn set_pte_with_level(&mut self, ppn: PhysPage, vpn: VirtPage, level: usize) -> Option<PageTableEntry> {
+    pub fn set_pte_with_level(&mut self, new_pte: PageTableEntry, vpn: VirtPage, level: usize) -> Option<PageTableEntry> {
         let pte = self.find_pte_with_level(vpn, level, false)?;
-        *pte = PageTableEntry::new(ppn, PTEFlags::V);
-        Some(pte.clone())
+        let old_pte = pte.clone();
+        *pte = new_pte;
+        Some(old_pte)
     }
 
     pub fn root_ppn(&self) -> PhysPage {
@@ -176,8 +177,6 @@ impl PageTable {
     }
    
     // find ceil 用于找到内存范围集合上限对应的物理地址
-    // 其实这个地址是用不上的，比如 0x8000 是上限，但是只有 0x7FFF 是实际使用到的地址
-    // 如果此时 0x7FFF 对应的 0x107FFF，那么 0x8000 就需要对应 0x108000，即使 0x8000 这个虚拟地址是没有被分配的
     pub fn translate_ceil(&mut self, ceil_va: VirtAddr) -> Option<PhysAddr> {
         let pa = self.translate(ceil_va.reduce(1))?;
         Some(pa.add(1))
