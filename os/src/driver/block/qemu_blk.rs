@@ -10,8 +10,6 @@ use virtio_drivers::{
     BufferDirection, Hal, PhysAddr
 };
 
-const BLK_HEADER_ADDR: usize = 0x10008000;
-
 use crate::mm::{dma::{dma_alloc, dma_dealloc}, pt::translate};
 
 use super::BlockDevice;
