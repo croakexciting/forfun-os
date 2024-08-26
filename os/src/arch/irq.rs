@@ -45,7 +45,8 @@ pub fn irq_handler(ctx: &mut TrapContext) -> &mut TrapContext {
             set_signal(None, SIGILL);
         }
         IrqCause::External => {
-            crate::board::external_irq_handler();
+            // crate::board::
+            crate::board::external_irq_handler()
         }
     }
 

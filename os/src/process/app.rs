@@ -1025,7 +1025,7 @@ impl Process {
     }
 
     pub fn map_peripheral(&mut self, pa: PhysAddr, size: usize) -> isize {
-        self.mm.map_peripheral(pa, size, permission)
+        self.mm.map_peripheral(pa, size)
     }
 }
 

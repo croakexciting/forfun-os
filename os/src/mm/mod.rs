@@ -352,15 +352,15 @@ impl MemoryManager {
         self._kernel_area.push(kcode);
 
         // 暂时 dma 和外设地址还是恒等映射，后面要改成 map
-        let mut device_area = MapArea::new(
-            VirtAddr::from(0x1000_0000), 
-            VirtAddr::from(0x1001_0000), 
-            MapType::Identical,
-            Permission::R | Permission::W | Permission::X
-        );
+        // let mut device_area = MapArea::new(
+        //     VirtAddr::from(0x1000_0000), 
+        //     VirtAddr::from(0x1001_0000), 
+        //     MapType::Identical,
+        //     Permission::R | Permission::W | Permission::X
+        // );
 
-        device_area.map(&mut self.pt);
-        self._kernel_area.push(device_area);
+        // device_area.map(&mut self.pt);
+        // self._kernel_area.push(device_area);
 
         let mut dma_area = MapArea::new(
             VirtAddr::from(0x8700_0000), 
@@ -378,15 +378,15 @@ impl MemoryManager {
 
     pub fn add_kernel_pt(&mut self, pte: PageTableEntry) -> Option<PageTableEntry> {
         self.kernel_pte = pte;
-        let mut device_area = MapArea::new(
-            VirtAddr::from(0x1000_0000), 
-            VirtAddr::from(0x1001_0000), 
-            MapType::Identical,
-            Permission::R | Permission::W | Permission::X
-        );
+        // let mut device_area = MapArea::new(
+        //     VirtAddr::from(0x1000_0000), 
+        //     VirtAddr::from(0x1001_0000), 
+        //     MapType::Identical,
+        //     Permission::R | Permission::W | Permission::X
+        // );
 
-        device_area.map(&mut self.pt);
-        self._kernel_area.push(device_area);
+        // device_area.map(&mut self.pt);
+        // self._kernel_area.push(device_area);
         self.pt.set_pte_with_level(pte, VirtAddr(KERNEL_START_ADDR).into(), 0)
     }
 }

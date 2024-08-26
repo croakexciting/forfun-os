@@ -1,4 +1,4 @@
-use crate::driver::serial::console_putchar;
+use crate::board::console_putchar;
 use core::fmt::{self, Write};
 
 struct Stdout;

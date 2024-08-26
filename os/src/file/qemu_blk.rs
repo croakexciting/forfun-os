@@ -1,5 +1,5 @@
 use alloc::{sync::Arc, vec};
-use crate::driver::block::{qemu_blk::QemuBlk, BlockDevice, BlockIter};
+use crate::{board::init_blk0, driver::block::{BlockDevice, BlockIter}};
 use spin::mutex::Mutex;
 
 use crate::file::File;
@@ -12,7 +12,7 @@ pub struct QemuBlkFile {
 impl QemuBlkFile {
     pub fn new() -> Self {
         Self { 
-            device: Arc::new(Mutex::new(QemuBlk::new())), 
+            device: Arc::new(Mutex::new(init_blk0())), 
             seek: Arc::new(Mutex::new(0)),
         }
     }

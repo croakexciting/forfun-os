@@ -1,4 +1,4 @@
-use crate::{driver::serial::console_getchar, mm::area::UserBuffer};
+use crate::{board::console_getchar, mm::area::UserBuffer};
 use super::File;
 pub struct Stdout;
 

@@ -22,8 +22,8 @@ pub struct QemuBlk {
 }
 
 impl QemuBlk {
-    pub fn new() -> Self {
-        Self { device: init_blk().unwrap(), block_size_log2: 9 }
+    pub fn new(addr: usize) -> Self {
+        Self { device: init_blk(addr).unwrap(), block_size_log2: 9 }
     }
 }
 
@@ -47,8 +47,8 @@ impl BlockDevice for QemuBlk {
     }
 }
 
-pub fn init_blk() -> Option<VirtIOBlk<HalImpl, MmioTransport>> {
-    let header = NonNull::new(BLK_HEADER_ADDR as *mut VirtIOHeader).unwrap();
+pub fn init_blk(addr: usize) -> Option<VirtIOBlk<HalImpl, MmioTransport>> {
+    let header = NonNull::new(addr as *mut VirtIOHeader).unwrap();
     match unsafe { MmioTransport::new(header) } {
         Err(e) => {
             println!("Error creating VirtIO MMIO transport: {}", e);
