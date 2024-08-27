@@ -6,30 +6,25 @@
 #![feature(const_slice_from_raw_parts_mut)]
 
 mod arch;
+mod board;
 mod sbi;
+
 #[macro_use]
 mod utils;
-mod trap;
-mod syscall;
-mod process;
-mod mm;
+
 mod driver;
 mod file;
 mod ipc;
+mod mm;
+mod process;
+mod syscall;
 
-#[cfg(feature = "riscv_qemu")]
-#[path = "board/riscv_qemu.rs"]
-mod board;
-
-use core::arch::global_asm;
 extern crate alloc;
-use process::{create_proc, run_tasks};
+use arch::irq;
+use board::board_init;
 use linked_list_allocator::LockedHeap;
-use utils::timer;
-
-global_asm!(include_str!("arch/riscv64/entry.asm"));
-global_asm!(include_str!("trap/trap.S"));
-global_asm!(include_str!("process/switch.S"));
+use process::{create_proc, run_tasks};
+use crate::board::timer;
 
 fn clear_bss() {
     extern "C" {
@@ -58,7 +53,10 @@ pub fn init_heap() {
         fn eheap();
     }
 
-    println!("[kernel] heap start at {:#x}, end at {:#x}", sheap as usize, eheap as usize);
+    println!(
+        "[kernel] heap start at {:#x}, end at {:#x}",
+        sheap as usize, eheap as usize
+    );
     unsafe {
         HEAP_ALLOCATOR
             .lock()
@@ -70,9 +68,9 @@ pub fn init_heap() {
 pub fn os_main() -> ! {
     clear_bss();
     init_heap();
-    trap::init();
-    trap::enable_timer_interrupt();
+    irq::init();
     timer::set_trigger();
     create_proc();
+    board_init();
     run_tasks();
 }

@@ -1,30 +1,35 @@
 pub mod pt;
-pub mod basic;
 pub mod allocator;
 pub mod area;
 pub mod elf;
 pub mod buddy;
 pub mod dma;
+pub mod peripheral;
 
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use area::{MapArea, Permission, MapType};
-use basic::{PhysAddr, PhysPage, VirtAddr, VirtPage, PAGE_SIZE};
+use peripheral::peripheral_alloc;
+use crate::arch::memory::page::{
+    PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage, PAGE_SIZE
+};
 use buddy::BuddyAllocator;
 use pt::PageTable;
 use spin::rwlock::RwLock;
 
-use crate::trap::context::TrapContext;
+use crate::arch::context::TrapContext;
 
 // 出于简单考虑，我第一步计划是将整个内存空间算作一个 map aera
 const KERNEL_START_ADDR: usize = 0x80200000;
 const KERNEL_END_ADDR: usize = 0x80400000;
-const KERNEL_STACK_SIZE: usize = 4096 * 8;
-// 暂定将内核栈固定在 0x9000000 这个虚拟地址，大小为 16KiB，其实地址范围是 [0x90000000 - 16KiB, 0x90000000}
-// 而且由于这一大段下面一直到内核空间都是无人使用的，相当于是一个保护页
-const KERNEL_STACK_START: usize = 0x90000000;
-const USER_STACK_START: usize = 0x80000000;
 
+// 暂定将内核栈固定在 0x8000000 这个虚拟地址，大小为 64KiB，其实地址范围是 [0x80000000 - 64KiB, 0x80000000}
+// 而且由于这一大段下面一直到内核空间都是无人使用的，相当于是一个保护页
+// TODO: kernel stack 需要 64KB，非常大，需要优化下看看为什么这么大
+pub const KERNEL_STACK_START: usize = 0x80000000;
+const KERNEL_STACK_SIZE: usize = 4096 * 16;
+
+pub const USER_STACK_START: usize = 0x7ff8_0000;
 // 用户栈大小暂固定为 8KiB
 const USER_STACK_SIZE: usize = 4096 * 2;
 
@@ -35,27 +40,15 @@ pub struct MemoryManager {
     app_areas: Vec<Arc<RwLock<MapArea>>>,
     // 堆可用区域，左闭右开的集合
     buddy_alloctor: Option<BuddyAllocator>,
+    kernel_pte: PageTableEntry,
 
-    _kernel_area: MapArea,
-    _device_area: MapArea,
-    _dma_area: MapArea,
+    _kernel_area: Vec<MapArea>,
 }
 
 impl MemoryManager {
     pub fn new() -> Self {
         let mut pt = PageTable::new();
 
-        // default map all kernel space
-        let mut kernel_area = MapArea::new(
-            KERNEL_START_ADDR.into(), 
-            KERNEL_END_ADDR.into(), 
-            MapType::Identical, 
-            Permission::R | Permission::W | Permission::X
-        );
-
-        kernel_area.map(&mut pt);
-
-        // 默认创建一个 8kib 的放置内核栈的 area，所以初始化 sp 可以设为 0x8FFFFFF0
         let mut kernel_stack_area = MapArea::new(
             (KERNEL_STACK_START- KERNEL_STACK_SIZE).into(), 
             (KERNEL_STACK_START).into(),
@@ -65,34 +58,16 @@ impl MemoryManager {
 
         kernel_stack_area.map(&mut pt);
 
-        // 将外设地址也 map 过去
-        let mut device_area = MapArea::new(
-            VirtAddr::from(0x1000_0000), 
-            VirtAddr::from(0x1001_0000), 
-            MapType::Identical,
-            Permission::R | Permission::W | Permission::X
-        );
-
-        device_area.map(&mut pt);
-
-        let mut dma_area = MapArea::new(
-            VirtAddr::from(0x8700_0000), 
-            VirtAddr::from(0x8800_0000), 
-            MapType::Identical,
-            Permission::R | Permission::W
-        );
-        dma_area.map(&mut pt);
-
         let app_areas: Vec<Arc<RwLock<MapArea>>> = Vec::with_capacity(8);
+        let _kernel_area = Vec::new();
         
         Self {
             pt,
             kernel_stack_area, 
             app_areas,
             buddy_alloctor: None,
-            _kernel_area: kernel_area,
-            _device_area: device_area,
-            _dma_area: dma_area,
+            kernel_pte: PageTableEntry(0),
+            _kernel_area,
         }
     }
 
@@ -203,6 +178,9 @@ impl MemoryManager {
     }
 
     pub fn fork(&mut self, parent: &mut Self) {
+        // append kernel stack
+        self.add_kernel_pt(parent.kernel_pte);
+        
         // 将父进程的所有 app area 复制一份，通过智能指针来实现自动 drop
         self.app_areas.reserve(parent.app_areas.len());
         for area in parent.app_areas.iter_mut() {
@@ -272,13 +250,16 @@ impl MemoryManager {
         Some(weak_ptr)
     }
 
-    pub fn mmap_with_addr(&mut self, pa: PhysAddr, size: usize, permission: usize) -> isize {
+    pub fn mmap_with_addr(&mut self, pa: PhysAddr, size: usize, permission: usize, user: bool) -> isize {
         assert_eq!(size % PAGE_SIZE, 0);
 
         let mut ppns: Vec<PhysPage> = Vec::new();
 
         let mut p = Permission::from_bits_truncate((permission as u8) << 1);
-        p.insert(Permission::U);
+
+        if user == true {
+            p.insert(Permission::U);
+        }
 
         for i in 0..(size/PAGE_SIZE) {
             let mut ppn: PhysPage = pa.into();
@@ -286,7 +267,7 @@ impl MemoryManager {
             ppns.push(ppn)
         }
 
-        self.map_defined(&ppns, p)
+        self.map_defined(&ppns, p, user)
     }
 
     pub fn umap_dyn_area(&mut self, start_vpn: VirtPage) -> isize {
@@ -302,7 +283,7 @@ impl MemoryManager {
         -1
     }
 
-    pub fn map_defined(&mut self, ppns: &Vec<PhysPage>, permission: Permission) -> isize {
+    pub fn map_defined(&mut self, ppns: &Vec<PhysPage>, permission: Permission, user: bool) -> isize {
         if let Some(vpns) = self.alloc(ppns.len()) {
             let mut new_area = MapArea::new(
                 vpns.0.into(), 
@@ -311,11 +292,101 @@ impl MemoryManager {
                 permission.clone()
             );
             new_area.map_defined(&mut self.pt, ppns);
-            let area_ptr = Arc::new(RwLock::new(new_area));
-            self.app_areas.push(area_ptr);
+            if user == true {
+                let area_ptr = Arc::new(RwLock::new(new_area));
+                self.app_areas.push(area_ptr);    
+            } else {
+                self._kernel_area.push(new_area);
+            }
             VirtAddr::from(vpns.0).0 as isize
         } else {
             -1
         }
+    }
+
+    pub fn map_peripheral(&mut self, pa: PhysAddr, size: usize) -> isize {
+        let p = Permission::R | Permission::W | Permission::X;
+
+        let mut pn = size / PAGE_SIZE;
+        if (size % PAGE_SIZE) != 0 {
+            pn += 1;
+        }
+
+        let mut ppns: Vec<PhysPage> = Vec::with_capacity(pn);
+        let mut start_ppn: PhysPage = pa.into();
+        for _ in 0..pn {
+            ppns.push(start_ppn);
+            start_ppn = start_ppn.next();
+        }
+
+        if let Some(vpa_start) = peripheral_alloc(pn) {
+            let mut new_area = MapArea::new(
+                vpa_start.into(), 
+                (vpa_start + size).into(), 
+                MapType::Defined, 
+                p
+            );
+            new_area.map_defined(&mut self.pt, &ppns);
+            self._kernel_area.push(new_area);
+            vpa_start as isize
+        } else {
+            -1
+        }
+    }
+
+    /*
+        TODO：如果每个进程的页表都管理一套 kernel area，相当浪费内存
+        计划是在 0 级（最高级）页表上留一个页表项指向一个 1 级页表
+        这个页表存储 kernel pte，每个进程 0 级页表均指向它，这样实现了 kernel pte 共享
+        一个一级页表可以指向 1G 内存，内核空间也够用，kernel 和外设地址都放在这里
+    */
+    pub fn init_kernel_area(&mut self) -> Option<PageTableEntry> {
+        let mut kcode = MapArea::new(
+            KERNEL_START_ADDR.into(),
+            KERNEL_END_ADDR.into(),
+            MapType::Identical,
+            Permission::R | Permission::W | Permission::X
+        );
+
+        kcode.map(&mut self.pt);
+        self._kernel_area.push(kcode);
+
+        // 暂时 dma 和外设地址还是恒等映射，后面要改成 map
+        // let mut device_area = MapArea::new(
+        //     VirtAddr::from(0x1000_0000), 
+        //     VirtAddr::from(0x1001_0000), 
+        //     MapType::Identical,
+        //     Permission::R | Permission::W | Permission::X
+        // );
+
+        // device_area.map(&mut self.pt);
+        // self._kernel_area.push(device_area);
+
+        let mut dma_area = MapArea::new(
+            VirtAddr::from(0x8700_0000), 
+            VirtAddr::from(0x8800_0000), 
+            MapType::Identical,
+            Permission::R | Permission::W
+        );
+        dma_area.map(&mut self.pt);
+        self._kernel_area.push(dma_area);
+
+        let pte = self.pt.find_pte_with_level(VirtAddr(KERNEL_START_ADDR).into(), 0, true)?;
+        self.kernel_pte = pte.clone();
+        Some(self.kernel_pte)
+    }
+
+    pub fn add_kernel_pt(&mut self, pte: PageTableEntry) -> Option<PageTableEntry> {
+        self.kernel_pte = pte;
+        // let mut device_area = MapArea::new(
+        //     VirtAddr::from(0x1000_0000), 
+        //     VirtAddr::from(0x1001_0000), 
+        //     MapType::Identical,
+        //     Permission::R | Permission::W | Permission::X
+        // );
+
+        // device_area.map(&mut self.pt);
+        // self._kernel_area.push(device_area);
+        self.pt.set_pte_with_level(pte, VirtAddr(KERNEL_START_ADDR).into(), 0)
     }
 }

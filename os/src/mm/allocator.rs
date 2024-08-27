@@ -1,8 +1,7 @@
 use alloc::vec::Vec;
 use lazy_static::*;
 use crate::utils::type_extern::RefCellWrap;
-
-use super::basic::*;
+use crate::arch::memory::page::*;
 
 // reserve for apps
 const KERNEL_ALLOCATOR_START: usize = 0x80380000;

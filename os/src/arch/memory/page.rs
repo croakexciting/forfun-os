@@ -1,11 +1,14 @@
 use bitflags::bitflags;
+use crate::arch::inner::memory::page;
 
-const PA_VALID_WIDTH: usize = 56;
-const VA_VALID_WIDTH: usize = 39;
-const PPN_VALID_WIDTH: usize = 44;
-const VPN_VALID_WIDTH: usize = 27;
-pub const INPAGE_OFFSET_WIDTH: usize = 12;
-pub const PAGE_SIZE: usize = 0x1000;
+const PA_VALID_WIDTH: usize = page::PA_VALID_WIDTH;
+const VA_VALID_WIDTH: usize = page::VA_VALID_WIDTH;
+const PPN_VALID_WIDTH: usize = page::PPN_VALID_WIDTH;
+const VPN_VALID_WIDTH: usize = page::VPN_VALID_WIDTH;
+const PN_LEVEL_NUM: usize = page::PN_LEVEL_NUM;
+const PN_BITSIZE: usize = page::PN_BITSIZE;
+pub const INPAGE_OFFSET_WIDTH: usize = page::INPAGE_OFFSET_WIDTH;
+pub const PAGE_SIZE: usize = page::PAGE_SIZE;
 
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct PhysAddr(pub usize);
@@ -127,7 +130,7 @@ impl PhysPage {
 
     pub fn bytes_array(&self) -> &'static mut [u8] {
         let addr: PhysAddr = (*self).into();
-        unsafe {core::slice::from_raw_parts_mut(addr.0 as *mut u8, 4096)}
+        unsafe {core::slice::from_raw_parts_mut(addr.0 as *mut u8, PAGE_SIZE)}
     }
 
     pub fn clear_page(&self) {
@@ -148,17 +151,18 @@ impl PhysPage {
     }
 }
 
-// riscv 中页表等级从高到底叫做 2,1,0 级
-// 这种命名方式和 X86 是刚好相反的，但是命名我们无需关心，
-// 为了方便管理，我们还是采用 0,1,2 的方式, 将最高层页表 index 放在 [0]
+/* 
+    riscv 中页表等级从高到底叫做 2,1,0 级
+    为了方便管理，我们还是采用 0,1,2 的方式, 将最高层页表 index 放在 [0]
+*/
 impl VirtPage {
-    pub fn index(&self) -> [usize; 3] {
+    pub fn index(&self) -> [usize; PN_LEVEL_NUM] {
         let mut vpn = self.0;
-        let mut idx = [0usize; 3];
-        for i in (0..3).rev() {
+        let mut idx = [0usize; PN_LEVEL_NUM];
+        for i in (0..PN_LEVEL_NUM).rev() {
             // 低9位有效
-            idx[i] = vpn & 511;
-            vpn >>= 9;
+            idx[i] = vpn & ((1 << PN_BITSIZE) - 1);
+            vpn >>= PN_BITSIZE;
         }
         idx
     }
@@ -177,10 +181,11 @@ impl VirtPage {
 
     pub fn bytes_array(&self) -> &'static mut [u8] {
         let addr: VirtAddr = (*self).into();
-        unsafe {core::slice::from_raw_parts_mut(addr.0 as *mut u8, 4096)}
+        unsafe {core::slice::from_raw_parts_mut(addr.0 as *mut u8, PAGE_SIZE)}
     }
 }
 
+// TODO: pte struct need set in arch/specific_cpu, it's not general
 bitflags! {
     #[derive(Clone, Copy)]
     pub struct PTEFlags: u8 {
@@ -243,4 +248,12 @@ impl PageTableEntry {
             self.0 |= p.bits() as usize;
         }
     }
+}
+
+pub fn root_ppn() -> usize {
+    crate::arch::inner::memory::page::root_ppn()
+}
+
+pub fn enable_va(id: usize, ppn: usize) {
+    crate::arch::inner::memory::page::enable_va(id, ppn)
 }

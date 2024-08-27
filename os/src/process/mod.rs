@@ -1,31 +1,27 @@
 #![allow(unused)]
 
 pub mod app;
-pub mod switch;
-pub mod context;
 pub mod pid;
 
 use core::usize;
 
-use app::*;
 use alloc::{string::String, sync::Arc, vec::Vec};
+use app::*;
 use spin::mutex::Mutex;
 
 use crate::{
-    mm::{area::UserBuffer, basic::VirtAddr}, trap::context::TrapContext, utils::type_extern::RefCellWrap
+    arch::memory::page::{VirtAddr, VirtPage}, mm::area::UserBuffer, utils::type_extern::RefCellWrap
 };
 
 use lazy_static::*;
 
 lazy_static! {
-    static ref TASK_MANAGER: Arc<TaskManager> = unsafe {
-        Arc::new(TaskManager::new())
-    };
+    static ref TASK_MANAGER: Arc<TaskManager> = unsafe { Arc::new(TaskManager::new()) };
 }
 
 // Default create the first app, other app created by manual
 pub fn create_proc() -> isize {
-    let elf = unsafe { core::slice::from_raw_parts(0x8100_0000 as *mut u8, 4096*100)};
+    let elf = unsafe { core::slice::from_raw_parts(0x8100_0000 as *mut u8, 4096 * 100) };
     TASK_MANAGER.create_initproc(5, elf)
 }
 
@@ -55,7 +51,8 @@ pub fn back_to_idle() {
 }
 
 pub fn cow(va: usize) -> Result<(), &'static str> {
-    TASK_MANAGER.cow(VirtAddr::from(va).into())
+    let vpn: VirtPage = VirtAddr::from(va).into();
+    TASK_MANAGER.cow(vpn)
 }
 
 pub fn wait(pid: isize) -> isize {
@@ -80,7 +77,7 @@ pub fn open(name: String) -> isize {
 
 pub fn lseek(fd: usize, seek: usize) -> isize {
     TASK_MANAGER.lseek(fd, seek)
-} 
+}
 
 pub fn sigaction(signal: usize, handler: usize) -> isize {
     TASK_MANAGER.sigaction(signal, handler)
@@ -118,8 +115,12 @@ pub fn ummap(addr: usize) -> isize {
     TASK_MANAGER.ummap(addr)
 }
 
-pub fn mmap_with_addr(pa: usize, size: usize, permission: usize) -> isize {
-    TASK_MANAGER.mmap_with_addr(pa, size, permission)
+pub fn mmap_with_addr(pa: usize, size: usize, permission: usize, user: bool) -> isize {
+    TASK_MANAGER.mmap_with_addr(pa, size, permission, user)
+}
+
+pub fn map_peripheral(pa: usize, size: usize) -> isize {
+    TASK_MANAGER.map_peripheral(pa, size)
 }
 
 pub fn shm_open(name: String, size: usize, permission: usize) -> isize {

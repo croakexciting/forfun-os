@@ -1,7 +1,6 @@
 use core::ptr::NonNull;
 
 use alloc::string::{String, ToString};
-use riscv::register;
 use virtio_drivers::{
     device::blk::VirtIOBlk, 
     transport::{
@@ -10,8 +9,6 @@ use virtio_drivers::{
     }, 
     BufferDirection, Hal, PhysAddr
 };
-
-const BLK_HEADER_ADDR: usize = 0x10008000;
 
 use crate::mm::{dma::{dma_alloc, dma_dealloc}, pt::translate};
 
@@ -23,8 +20,8 @@ pub struct QemuBlk {
 }
 
 impl QemuBlk {
-    pub fn new() -> Self {
-        Self { device: init_blk().unwrap(), block_size_log2: 9 }
+    pub fn new(addr: usize) -> Self {
+        Self { device: init_blk(addr).unwrap(), block_size_log2: 9 }
     }
 }
 
@@ -48,8 +45,8 @@ impl BlockDevice for QemuBlk {
     }
 }
 
-pub fn init_blk() -> Option<VirtIOBlk<HalImpl, MmioTransport>> {
-    let header = NonNull::new(BLK_HEADER_ADDR as *mut VirtIOHeader).unwrap();
+pub fn init_blk(addr: usize) -> Option<VirtIOBlk<HalImpl, MmioTransport>> {
+    let header = NonNull::new(addr as *mut VirtIOHeader).unwrap();
     match unsafe { MmioTransport::new(header) } {
         Err(e) => {
             println!("Error creating VirtIO MMIO transport: {}", e);
@@ -99,7 +96,7 @@ unsafe impl Hal for HalImpl {
     }
 
     unsafe fn share(buffer: NonNull<[u8]>, _direction: BufferDirection) -> PhysAddr {
-        let ppn = register::satp::read().ppn();
+        let ppn = crate::arch::memory::page::root_ppn();
         if ppn == 0 {
             buffer.as_ptr() as *mut u8 as PhysAddr
         } else {

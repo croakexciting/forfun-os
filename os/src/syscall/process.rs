@@ -1,4 +1,7 @@
-use crate::{arch::riscv64::copy_from_user_into_vector, mm::area::UserBuffer, process::*};
+use crate::{
+    arch::memory::copy::copy_from_user_into_vector, 
+    mm::area::UserBuffer, process::*
+};
 
 pub fn sys_exit(code: isize) -> ! {
     exit(code as isize);

@@ -4,21 +4,16 @@ use alloc::sync::Arc;
 use bitflags::bitflags;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
+use crate::arch::memory::page::*;
 
-use crate::arch::riscv64::{
-    copy_from_user_into_vector, 
-    copy_user_page_to_vector, 
-    copy_vector_to_user_page
+use crate::arch::memory::copy::{
+    copy_from_user_into_vector, copy_user_page_to_vector, copy_vector_to_user_page, disable_user_access, enable_user_access
 };
 
 use super::{
     allocator::{frame_alloc, PhysFrame}, 
-    basic::{
-        PTEFlags, PageTableEntry, PhysPage, 
-        VirtAddr, VirtPage, 
-        PAGE_SIZE,
-    }, 
-    pt::PageTable};
+    pt::PageTable
+};
 
 #[derive(Clone)]
 pub struct MapArea {
@@ -164,7 +159,7 @@ impl MapArea {
             // copy data page by page
             if let Some(mut p) = pte {
                 if offset < data.len() {
-                    unsafe { riscv::register::sstatus::set_sum(); }
+                    enable_user_access();
                     let src = &data[offset..data.len().min(offset + PAGE_SIZE)];
                     let dst = &mut VirtPage::from(v).bytes_array()[..src.len()];
                     // 如果没有写入权限。临时修改
@@ -178,7 +173,7 @@ impl MapArea {
                         dst.copy_from_slice(src);
                         offset += PAGE_SIZE;
                     }
-                    unsafe { riscv::register::sstatus::clear_sum(); }
+                    disable_user_access();
                 }
             } else {
                 return Err("pte map failed");
@@ -274,13 +269,13 @@ impl UserBuffer {
     #[allow(unused)]
     pub fn new(b: &'static mut [u8]) -> Self {
         // 简单起见，声明一个 userbuffer 时，会自动将 sum flag 置 1
-        unsafe { riscv::register::sstatus::set_sum() };
+        enable_user_access();
         Self { buffer: b }
     }
 
     pub fn new_from_raw(addr: *mut u8, len: usize) -> Self {
         unsafe {
-            riscv::register::sstatus::set_sum();
+            enable_user_access();
             let buffer = core::slice::from_raw_parts_mut(addr, len);
             Self { buffer }
         }
@@ -293,6 +288,6 @@ impl UserBuffer {
 
 impl Drop for UserBuffer {
     fn drop(&mut self) {
-        unsafe { riscv::register::sstatus::clear_sum() };
+        disable_user_access();
     }
 }
