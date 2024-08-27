@@ -9,9 +9,7 @@ use crate::arch::memory::page::{
 };
 use crate::utils::type_extern::RefCellWrap;
 use super::buddy::BuddyAllocator;
-
-const PERIPHERAL_START_ADDR: usize = 0x9000_0000;
-const PERIPHERAL_END_ADDR: usize = 0xA000_0000;
+use crate::board::peri::memory::{PERIPHERAL_END_ADDR, PERIPHERAL_START_ADDR};
 
 lazy_static! {
     pub static ref PERIPHERAL_ALLOCATOR: RefCellWrap<BuddyAllocator> = unsafe {

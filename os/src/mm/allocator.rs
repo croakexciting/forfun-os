@@ -2,11 +2,11 @@ use alloc::vec::Vec;
 use lazy_static::*;
 use crate::utils::type_extern::RefCellWrap;
 use crate::arch::memory::page::*;
-
-// reserve for apps
-const KERNEL_ALLOCATOR_START: usize = 0x80380000;
-const ALLOCATOR_START: usize = 0x80400000;
-const ALLOCATOR_END: usize = 0x80800000;
+use crate::board::peri::memory::{
+    KERNEL_ALLOCATOR_START,
+    ALLOCATOR_START,
+    ALLOCATOR_END,
+};
 
 // This struct locate at memory
 pub struct PhysFrameAllocator {
