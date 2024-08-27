@@ -21,7 +21,7 @@ mod syscall;
 
 extern crate alloc;
 use arch::irq;
-use board::enable_virtual_mode;
+use board::board_init;
 use linked_list_allocator::LockedHeap;
 use process::{create_proc, run_tasks};
 use crate::board::timer;
@@ -71,6 +71,6 @@ pub fn os_main() -> ! {
     irq::init();
     timer::set_trigger();
     create_proc();
-    enable_virtual_mode();
+    board_init();
     run_tasks();
 }

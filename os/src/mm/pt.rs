@@ -1,9 +1,7 @@
 // page table manager
 
-use core::borrow::{Borrow, BorrowMut};
-
+use core::borrow::BorrowMut;
 use alloc::vec::Vec;
-use riscv::register::fcsr::read;
 use super::allocator::{kernel_frame_alloc, PhysFrame};
 use crate::arch::memory::page::{
     root_ppn, PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage

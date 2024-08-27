@@ -18,7 +18,7 @@ lazy_static! {
         let start_ppn: PhysPage = PhysAddr::from(PERIPHERAL_START_ADDR).into();
         let pn = (PERIPHERAL_END_ADDR - PERIPHERAL_START_ADDR) / PAGE_SIZE;
 
-        RefCellWrap::new(BuddyAllocator::new(5, start_ppn.0.into(), pn))
+        RefCellWrap::new(BuddyAllocator::new(10, start_ppn.0.into(), pn))
     };
 }
 
@@ -27,6 +27,7 @@ pub fn peripheral_alloc(pn: usize) -> Option<usize> {
     Some(VirtAddr::from(start).0)
 }
 
+#[allow(unused)]
 pub fn peripheral_dealloc(addr: usize, pn: usize) {
     let vpn: VirtPage = VirtAddr::from(addr).into();
     PERIPHERAL_ALLOCATOR.exclusive_access().dealloc(vpn, pn)

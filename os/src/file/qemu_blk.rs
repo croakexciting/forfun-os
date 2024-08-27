@@ -12,7 +12,7 @@ pub struct QemuBlkFile {
 impl QemuBlkFile {
     pub fn new() -> Self {
         Self { 
-            device: Arc::new(Mutex::new(QemuBlk::new(BLK0_VA.exclusive_access().clone()))), 
+            device: Arc::new(Mutex::new(QemuBlk::new(BLK0_VA.read().clone()))), 
             seek: Arc::new(Mutex::new(0)),
         }
     }

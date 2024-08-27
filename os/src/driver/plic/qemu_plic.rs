@@ -9,6 +9,10 @@ pub enum Level {
 }
 
 impl PLIC {
+    pub fn set_addr(&mut self, addr: usize) {
+        self.addr = addr
+    }
+
     fn priority_ptr(&self, interrupt_id: usize) -> *mut u32 {
         assert!(interrupt_id > 0 && interrupt_id <= 127);
         (self.addr + interrupt_id * 4) as *mut u32

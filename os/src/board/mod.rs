@@ -14,9 +14,10 @@ pub fn console_getchar() -> usize {
 }
 
 pub fn external_irq_handler() {
-    // inner::plic::external_irq_handler()
+    peri::plic::external_irq_handler()
 }
 
-pub fn enable_virtual_mode() {
-    peri::enable_virtual_mode()
+pub fn board_init() {
+    peri::enable_virtual_mode();
+    peri::board_init()
 }

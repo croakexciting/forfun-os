@@ -305,7 +305,7 @@ impl MemoryManager {
     }
 
     pub fn map_peripheral(&mut self, pa: PhysAddr, size: usize) -> isize {
-        let p = Permission::R | Permission::W;
+        let p = Permission::R | Permission::W | Permission::X;
 
         let mut pn = size / PAGE_SIZE;
         if (size % PAGE_SIZE) != 0 {

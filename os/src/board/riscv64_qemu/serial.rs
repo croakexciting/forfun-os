@@ -1,4 +1,4 @@
-use crate::{driver, process};
+use crate::driver;
 
 pub const UART0_ADDR: usize = 0x1000_0000;
 
