@@ -4,11 +4,9 @@ use crate::utils::type_extern::RefCellWrap;
 use crate::arch::memory::page::{
     PhysPage, PhysAddr, VirtAddr, VirtPage, PAGE_SIZE
 };
+use crate::board::peri::memory::{DMA_START_ADDR, DMA_END_ADDR};
 use super::buddy::BuddyAllocator;
 use lazy_static::*;
-
-const DMA_START_ADDR: usize = 0x8700_0000;
-const DMA_END_ADDR: usize = 0x8800_0000;
 
 lazy_static! {
     pub static ref DMA_ALLOCATOR: RefCellWrap<BuddyAllocator> = unsafe {

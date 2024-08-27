@@ -18,20 +18,7 @@ use pt::PageTable;
 use spin::rwlock::RwLock;
 
 use crate::arch::context::TrapContext;
-
-// 出于简单考虑，我第一步计划是将整个内存空间算作一个 map aera
-const KERNEL_START_ADDR: usize = 0x80200000;
-const KERNEL_END_ADDR: usize = 0x80400000;
-
-// 暂定将内核栈固定在 0x8000000 这个虚拟地址，大小为 64KiB，其实地址范围是 [0x80000000 - 64KiB, 0x80000000}
-// 而且由于这一大段下面一直到内核空间都是无人使用的，相当于是一个保护页
-// TODO: kernel stack 需要 64KB，非常大，需要优化下看看为什么这么大
-pub const KERNEL_STACK_START: usize = 0x80000000;
-const KERNEL_STACK_SIZE: usize = 4096 * 16;
-
-pub const USER_STACK_START: usize = 0x7ff8_0000;
-// 用户栈大小暂固定为 8KiB
-const USER_STACK_SIZE: usize = 4096 * 2;
+use crate::board::peri::memory::*;
 
 // The memory manager for a process
 pub struct MemoryManager {
@@ -335,7 +322,7 @@ impl MemoryManager {
     }
 
     /*
-        TODO：如果每个进程的页表都管理一套 kernel area，相当浪费内存
+        如果每个进程的页表都管理一套 kernel area，相当浪费内存
         计划是在 0 级（最高级）页表上留一个页表项指向一个 1 级页表
         这个页表存储 kernel pte，每个进程 0 级页表均指向它，这样实现了 kernel pte 共享
         一个一级页表可以指向 1G 内存，内核空间也够用，kernel 和外设地址都放在这里
@@ -351,20 +338,9 @@ impl MemoryManager {
         kcode.map(&mut self.pt);
         self._kernel_area.push(kcode);
 
-        // 暂时 dma 和外设地址还是恒等映射，后面要改成 map
-        // let mut device_area = MapArea::new(
-        //     VirtAddr::from(0x1000_0000), 
-        //     VirtAddr::from(0x1001_0000), 
-        //     MapType::Identical,
-        //     Permission::R | Permission::W | Permission::X
-        // );
-
-        // device_area.map(&mut self.pt);
-        // self._kernel_area.push(device_area);
-
         let mut dma_area = MapArea::new(
-            VirtAddr::from(0x8700_0000), 
-            VirtAddr::from(0x8800_0000), 
+            VirtAddr::from(DMA_START_ADDR), 
+            VirtAddr::from(DMA_END_ADDR), 
             MapType::Identical,
             Permission::R | Permission::W
         );
@@ -378,15 +354,6 @@ impl MemoryManager {
 
     pub fn add_kernel_pt(&mut self, pte: PageTableEntry) -> Option<PageTableEntry> {
         self.kernel_pte = pte;
-        // let mut device_area = MapArea::new(
-        //     VirtAddr::from(0x1000_0000), 
-        //     VirtAddr::from(0x1001_0000), 
-        //     MapType::Identical,
-        //     Permission::R | Permission::W | Permission::X
-        // );
-
-        // device_area.map(&mut self.pt);
-        // self._kernel_area.push(device_area);
         self.pt.set_pte_with_level(pte, VirtAddr(KERNEL_START_ADDR).into(), 0)
     }
 }

@@ -1,6 +1,7 @@
 pub mod timer;
 pub mod plic;
 pub mod serial;
+pub mod memory;
 
 use crate::{
     driver::{self, serial::Uart}, 

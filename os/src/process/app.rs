@@ -778,7 +778,9 @@ impl Process {
     pub fn fork(&mut self) -> (Weak<Mutex<Self>>, usize) {
         let mut mm = MemoryManager::new();
         mm.fork(&mut self.mm);
-        let switch_ctx = SwitchContext::new_with_restore_addr_and_kernel_stack_sp(crate::mm::KERNEL_STACK_START);
+        let switch_ctx = SwitchContext::new_with_restore_addr_and_kernel_stack_sp(
+            crate::board::peri::memory::KERNEL_STACK_START
+        );
         let pid = pid::alloc().unwrap();
         let key = pid.0;
         let tick = self.tick;
