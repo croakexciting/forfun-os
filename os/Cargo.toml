@@ -22,9 +22,11 @@ default = ["riscv64_qemu"]
 # board select
 riscv64_qemu = ["riscv64"]
 k210 = ["riscv64"]
+aarch64_qemu = ["aarch64"]
 
 # cpu select
 riscv64 = []
+aarch64 = []
 
 [profile.release]
 debug = true
