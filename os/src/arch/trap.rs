@@ -18,14 +18,14 @@ pub fn init() {
         通常是进入一段汇编代码，在汇编中调用 irq_handler
         因此不用显式的注册 irq_handler 
      */
-    super::inner::irq::init();
+    super::inner::trap::init();
 }
 
 #[no_mangle]
 pub fn irq_handler(ctx: &mut TrapContext) -> &mut TrapContext {
-    match super::inner::irq::irq_casue() {
+    match super::inner::trap::irq_casue() {
         IrqCause::UserEnvCall => {
-            super::inner::irq::usercall(ctx);
+            super::inner::trap::usercall(ctx);
         }
         IrqCause::Timer => {
             set_trigger();
@@ -57,7 +57,7 @@ pub fn irq_handler(ctx: &mut TrapContext) -> &mut TrapContext {
         SignalCode::Action(handler) => {
             // save ctx for sigreturn
             save_trap_ctx();
-            super::inner::irq::set_singal_action(ctx, handler.handler, handler.sig);
+            super::inner::trap::set_singal_action(ctx, handler.handler, handler.sig);
         }
         SignalCode::KILL(e) => exit(e),
     }

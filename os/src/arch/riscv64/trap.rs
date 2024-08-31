@@ -5,7 +5,7 @@ use riscv::register::{
 };
 
 use crate::{
-    arch::{context::TrapContext, irq::IrqCause}, syscall::syscall
+    arch::{context::TrapContext, trap::IrqCause}, syscall::syscall
 };
 
 pub fn init() {

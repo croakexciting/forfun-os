@@ -1,5 +1,5 @@
 pub mod context;
-pub mod irq;
+pub mod trap;
 pub mod memory;
 
 use core::arch::global_asm;

@@ -25,7 +25,7 @@ __vecotr_\handler:
     bl      \handler
 .endm
 
-.macro FIQ_SUSPEND
+.macro SUSPEND
 1:      wfe
         b   1b
 .endm
@@ -36,19 +36,19 @@ __vecotr_\handler:
     .align 11
 __alltraps:
 .org 0x000
-    IRQ_HANDLER current_el0_synchronous
+    SUSPEND
 .org 0x080
-    IRQ_HANDLER current_el0_irq
+    SUSPEND
 .org 0x100
-    FIQ_SUSPEND
+    SUSPEND
 .org 0x180
-    IRQ_HANDLER current_el0_serror
+    SUSPEND
 .org 0x200
     IRQ_HANDLER current_elx_synchronous
 .org 0x280
     IRQ_HANDLER current_elx_irq
 .org 0x300
-    FIQ_SUSPEND
+    SUSPEND
 .org 0x380
     IRQ_HANDLER current_elx_serror
 .org 0x400
@@ -56,17 +56,17 @@ __alltraps:
 .org 0x480
     IRQ_HANDLER lower_aarch64_irq
 .org 0x500
-    FIQ_SUSPEND
+    SUSPEND
 .org 0x580
     IRQ_HANDLER lower_aarch64_serror
 .org 0x600
-    IRQ_HANDLER lower_aarch32_synchronous
+    SUSPEND
 .org 0x680
-    IRQ_HANDLER lower_aarch32_irq
+    SUSPEND
 .org 0x700
-    FIQ_SUSPEND
+    SUSPEND
 .org 0x780
-    IRQ_HANDLER lower_aarch32_serror
+    SUSPEND
 .org 0x800
 
 __restore:
@@ -90,5 +90,5 @@ __restore:
 	ldp	    x26, x27,   [sp, #16 * 13]
 	ldp	    x28, x29,   [sp, #16 * 14]
 
-    # TODO: how to get user sp
+    add     sp, sp,     #16 * 17
     eret
