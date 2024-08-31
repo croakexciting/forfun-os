@@ -9,3 +9,10 @@ log = "0.4"
 riscv = "0.10.1"
 buddy_system_allocator = "0.6"
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
+
+[features]
+default = ["aarch64_qemu"]
+aarch64_qemu = ["aarch64"] 
+
+aarch64 = []
+riscv64 = []
