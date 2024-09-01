@@ -1,9 +1,8 @@
-OUTPUT_ARCH(riscv)
+OUTPUT_ARCH(aarch64)
 ENTRY(_start)
-BASE_ADDRESS = 0x80200000;
+BASE_ADDRESS = 0x40000000;
 _heap_size = 0x100000;
-/* leave 512K for app kernel stack */
-_stack_start = 0x80380000;
+_stack_start = 0x40200000;
 
 SECTIONS
 {
@@ -48,7 +47,7 @@ SECTIONS
     {
         sheap = .;
         . += _heap_size;
-        . = ALIGN(4K);
+        . = ALIGN(4);
         eheap = .;
     }
 
@@ -60,7 +59,6 @@ SECTIONS
         sstack = .;
     }
 
-    . = ALIGN(4K);
     ekernel = .;
 
     /DISCARD/ : {

@@ -1,7 +1,5 @@
-pub mod context;
-
 use core::arch::global_asm;
-use context::TrapContext;
+use crate::arch::context::TrapContext;
 use riscv::register::{
     scause::{self, Trap, Exception}, 
     stval, 
@@ -29,7 +27,7 @@ pub fn trap_handler(ctx: &mut TrapContext) -> &mut TrapContext {
     let stval = stval::read();
     match scause.cause() {
         Trap::Exception(Exception::UserEnvCall) => {
-            ctx.sepc += 4;
+            ctx.x[33] += 4;
             ctx.x[10] = syscall(ctx.x[17], [ctx.x[10], ctx.x[11], ctx.x[12]]) as usize;
         }
         _ => {

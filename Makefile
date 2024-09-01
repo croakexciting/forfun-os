@@ -2,7 +2,7 @@ ARCH ?= riscv64
 
 ifeq ($(ARCH), riscv64)
 	TARGET = riscv64gc-unknown-none-elf
-	KERNEL_ENTRY = 0x80020000
+	KERNEL_ENTRY = 0x80200000
 else ifeq ($(ARCH), aarch64)
 	TARGET = aarch64-unknown-none
 	KERNEL_ENTRY = 0x40000000
@@ -27,25 +27,23 @@ K210-SERIALPORT ?= /dev/ttyUSB0
 K210-BOARD ?= kd233
 K210_BOOTLOADER_SIZE := 131072
 
-KERNEL_ENTRY := 0x80020000
-APP_ENTRY := 0x80200000
-APP_ENTRY2 := 0x80300000
+APP_ENTRY := 0x80300000
 
 # Binutils
 OBJDUMP := rust-objdump --arch-name=$(ARCH)
 OBJCOPY := rust-objcopy --binary-architecture=$(ARCH)
 
 ifeq ($(ARCH), riscv64)
-	QEMU_ARGS := -machine virt \
+	QEMU_ARGS = -machine virt \
 			 -nographic \
 			 -bios $(BOOTLOADER) \
 			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY) \
-			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY) \
-			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY2)
+			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY)
 else ifeq ($(ARCH), aarch64)
 	QEMU_ARGS = -machine virt \
 			 -cpu cortex-a72 \
 			 -nographic \
+			 -serial mon:stdio \
 			 -kernel $(KERNEL_ELF)
 endif
 
@@ -68,6 +66,6 @@ else ifeq ($(BOARD), k210)
 endif
 
 debug: build
-	qemu-system-riscv64 $(QEMU_ARGS) -s -S
+	@qemu-system-$(ARCH) $(QEMU_ARGS) -s -S
 
 .PHONY: build clean run

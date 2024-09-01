@@ -1,6 +1,6 @@
 use crate::{
     config::*, 
-    trap::context::TrapContext,
+    arch::context::TrapContext,
     utils::type_extern::RefCellWrap
 };
 
@@ -127,16 +127,12 @@ lazy_static! {
 }
 
 fn start_app(process: &Process) -> ! {
-    extern "C" {
-        fn __restore(ctx_addr: usize);
-    }
-
     match process.status {
         ProcessStatus::READY => unsafe {
             let sp = KERNEL_STACKS[process.id].push_context(TrapContext::new(
                 process.base_address
             ));
-            __restore(sp);
+            crate::arch::__restore(sp);
             unreachable!()
         },
         _ => panic!("Process status is not ready"),
