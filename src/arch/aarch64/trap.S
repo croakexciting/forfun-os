@@ -18,7 +18,7 @@ __vector_\handler:
     stp     x28, x29, [sp, #16 * 14]
     mrs     x9, ELR_EL1
     mrs     x10, SPSR_EL1
-    mrs     x11, ESR_EL1
+    mrs     x11, SP_EL0
     stp     lr, x11, [sp, #16 * 15]
     stp     x10, x9, [sp, #16 * 16]
     mov     x0, sp
@@ -74,6 +74,7 @@ __restore:
     ldp     lr, x11,    [sp, #16 * 15]
     msr     SPSR_EL1,   x10
     msr     ELR_EL1,    x9
+    msr     SP_EL0,     x11
 	ldp	    x0,  x1,    [sp, #16 * 0]
 	ldp	    x2,  x3,    [sp, #16 * 1]
 	ldp	    x4,  x5,    [sp, #16 * 2]
