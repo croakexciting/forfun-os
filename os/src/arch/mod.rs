@@ -1,4 +1,3 @@
-pub mod trap;
 pub mod memory;
 pub mod context;
 
@@ -10,3 +9,6 @@ mod inner;
 #[path = "aarch64/mod.rs"]
 mod inner;
 
+pub fn init() {
+    inner::trap::init();
+}

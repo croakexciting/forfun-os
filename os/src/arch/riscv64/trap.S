@@ -33,9 +33,9 @@ __alltraps:
     # read user stack from sscratch and save it on the kernel stack
     csrr t2, sscratch
     sd t2, 2*8(sp)
-    # set input argument of irq_handler(cx: &mut TrapContext)
+    # set input argument of trap_handler(cx: &mut TrapContext)
     mv a0, sp
-    call irq_handler
+    call trap_handler
 
 __restore:
     # case1: start running app by __restore

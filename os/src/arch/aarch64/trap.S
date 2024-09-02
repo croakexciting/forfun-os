@@ -1,6 +1,6 @@
 .macro IRQ_HANDLER handler
-__vecotr_\handler:
-    sub     sp,  sp, #16 * 17
+__vector_\handler:
+    sub     sp, sp, #16 * 17
     stp     x0, x1, [sp, #16 * 0]
     stp     x2, x3, [sp, #16 * 1]
     stp     x4, x5, [sp, #16 * 2]
@@ -18,11 +18,12 @@ __vecotr_\handler:
     stp     x28, x29, [sp, #16 * 14]
     mrs     x9, ELR_EL1
     mrs     x10, SPSR_EL1
-    mrs     x11, ESR_EL1
-    stp     lr, x9, [sp, #16 * 15]
-    stp     x10, x11, [sp, #16 * 16]
+    mrs     x11, SP_EL0
+    stp     lr, x11, [sp, #16 * 15]
+    stp     x10, x9, [sp, #16 * 16]
     mov     x0, sp
     bl      \handler
+    b       __restore
 .endm
 
 .macro SUSPEND
@@ -31,8 +32,6 @@ __vecotr_\handler:
 .endm
 
     .section .text
-    __alltraps
-    __restore
     .align 11
 __alltraps:
 .org 0x000
@@ -70,10 +69,12 @@ __alltraps:
 .org 0x800
 
 __restore:
-    ldr     w9,         [sp, #16 * 16]
-    ldp     lr, x10,    [sp, #16 * 15]
-    msr     SPSR_EL1,   x9
-    msr     ELR_EL1,    x10
+    mov     sp, x0
+    ldp     x10, x9,    [sp, #16 * 16]
+    ldp     lr, x11,    [sp, #16 * 15]
+    msr     SPSR_EL1,   x10
+    msr     ELR_EL1,    x9
+    msr     SP_EL0,     x11
 	ldp	    x0,  x1,    [sp, #16 * 0]
 	ldp	    x2,  x3,    [sp, #16 * 1]
 	ldp	    x4,  x5,    [sp, #16 * 2]
