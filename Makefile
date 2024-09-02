@@ -3,15 +3,17 @@ ARCH ?= riscv64
 ifeq ($(ARCH), riscv64)
 	TARGET = riscv64gc-unknown-none-elf
 	KERNEL_ENTRY = 0x80200000
+	APP_ENTRY = 0x80300000
 else ifeq ($(ARCH), aarch64)
 	TARGET = aarch64-unknown-none
 	KERNEL_ENTRY = 0x40000000
+	APP_ENTRY = 0x40200000
 endif
 
 MODE ?= release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/forfun-os
 KERNEL_BIN := $(KERNEL_ELF).bin
-APP_BIN := appbins/hello_world.bin
+APP_BIN := appbins/$(ARCH)/hello_world.bin
 
 ifeq ($(MODE), release)
 	MODE_ARG := --release
@@ -26,8 +28,6 @@ BOOTLOADER := ./bootloader/$(SBI)-$(BOARD).bin
 K210-SERIALPORT ?= /dev/ttyUSB0
 K210-BOARD ?= kd233
 K210_BOOTLOADER_SIZE := 131072
-
-APP_ENTRY := 0x80300000
 
 # Binutils
 OBJDUMP := rust-objdump --arch-name=$(ARCH)
@@ -44,7 +44,8 @@ else ifeq ($(ARCH), aarch64)
 			 -cpu cortex-a72 \
 			 -nographic \
 			 -serial mon:stdio \
-			 -kernel $(KERNEL_ELF)
+			 -kernel $(KERNEL_ELF) \
+			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY)
 endif
 
 build:

@@ -1,5 +1,5 @@
 use crate::{
-    config::*, 
+    arch::{KERNEL_STACK_SIZE, MAX_APP_NUM, APP_START_ADDRESS}, 
     arch::context::TrapContext,
     utils::type_extern::RefCellWrap
 };
@@ -90,7 +90,7 @@ struct Process {
 impl Process {
     pub fn new(id: usize, base_addr: usize) -> Self {
         Process {
-            id: id,
+            id,
             base_address: base_addr,
             status: ProcessStatus::UNINIT,
         }

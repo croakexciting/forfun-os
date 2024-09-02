@@ -7,7 +7,6 @@ mod arch;
 mod utils;
 mod syscall;
 mod process;
-mod config;
 
 extern crate alloc;
 use process::{start_first_app, create_app};

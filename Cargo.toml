@@ -15,7 +15,7 @@ aarch64-cpu = { version = "9.x.x", optional = true}
 arm_pl011 = { version = "0.1", optional = true}
 
 [features]
-default = ["riscv64_qemu"]
+default = ["aarch64_qemu"]
 riscv64_qemu = ["riscv64"]
 aarch64_qemu = ["aarch64"] 
 

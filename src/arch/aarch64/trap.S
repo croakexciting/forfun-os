@@ -1,5 +1,5 @@
 .macro IRQ_HANDLER handler
-__vecotr_\handler:
+__vector_\handler:
     sub     sp, sp, #16 * 17
     stp     x0, x1, [sp, #16 * 0]
     stp     x2, x3, [sp, #16 * 1]
@@ -23,6 +23,7 @@ __vecotr_\handler:
     stp     x10, x9, [sp, #16 * 16]
     mov     x0, sp
     bl      \handler
+    b       __restore
 .endm
 
 .macro SUSPEND
@@ -68,7 +69,8 @@ __alltraps:
 .org 0x800
 
 __restore:
-    ldp     x9, x10,    [sp, #16 * 16]
+    mov     sp, x0
+    ldp     x10, x9,    [sp, #16 * 16]
     ldp     lr, x11,    [sp, #16 * 15]
     msr     SPSR_EL1,   x10
     msr     ELR_EL1,    x9
