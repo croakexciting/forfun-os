@@ -1,6 +1,9 @@
 use core::arch::asm;
+use bitflags::bitflags;
 use aarch64_cpu::registers::*;
 use tock_registers::interfaces::ReadWriteable;
+
+use crate::arch::memory::page::PTEFlags;
 
 pub const PAGE_SIZE: usize = 0x1000;
 pub const PN_BITSIZE: usize = 9;
@@ -28,4 +31,8 @@ pub fn enable_va(id: usize, ppn: usize) {
         );
         SCTLR_EL1.modify(SCTLR_EL1::M::Enable + SCTLR_EL1::C::Cacheable + SCTLR_EL1::I::Cacheable);
     }
+}
+
+pub fn pte(ppn: usize, flags: PTEFlags) -> usize {
+    
 }
