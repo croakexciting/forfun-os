@@ -185,7 +185,6 @@ impl VirtPage {
     }
 }
 
-// TODO: pte struct need set in arch/specific_cpu, it's not general
 bitflags! {
     #[derive(Clone, Copy)]
     pub struct PTEFlags: u8 {
@@ -194,9 +193,6 @@ bitflags! {
         const W = 1 << 2;
         const X = 1 << 3;
         const U = 1 << 4;
-        const G = 1 << 5;
-        const A = 1 << 6;
-        const D = 1 << 7;
     }
 }
 
@@ -205,29 +201,23 @@ pub struct PageTableEntry(pub usize);
 
 impl PageTableEntry {
     pub fn new(ppn: PhysPage, flags: PTEFlags) -> Self {
-        // 8bit flags + 2bit rsw
-        Self(ppn.0 << 10 | flags.bits() as usize)
+        Self(page::pte(ppn.0, flags))
     }
 
     pub fn ppn(&self) -> PhysPage {
-        (self.0 >> 10).into()
+        (page::ppn(self.0)).into()
     }
 
     pub fn flags(&self) -> Option<PTEFlags> {
-        PTEFlags::from_bits(self.0 as u8)
-    }
-
-    pub fn is_set(&self, bit: PTEFlags) -> bool {
-        if let Some(p) = self.flags() {
-            if p.contains(bit) {
-                return true;
-            }
-        }
-        return false;
+        page::flags(self.0)
     }
 
     pub fn is_valid(&self) -> bool {
-        self.is_set(PTEFlags::V)
+        page::is_set(self.0, PTEFlags::V)
+    }
+
+    pub fn is_set(&self, flag: PTEFlags) -> bool {
+        page::is_set(self.0, flag)
     }
 
     pub fn clear(&mut self) {
@@ -235,18 +225,11 @@ impl PageTableEntry {
     }
 
     pub fn clear_flag(&mut self, bit: PTEFlags) {
-        if let Some(mut p) = self.flags() {
-            p.remove(bit);
-            let mask = 0xFFFFFFFFFFFFFF00 | p.bits() as usize;
-            self.0 &= mask;
-        }
+        self.0 = page::clear_flag(self.0, bit)
     }
 
     pub fn set_flag(&mut self, bit: PTEFlags) {
-        if let Some(mut p) = self.flags() {
-            p.insert(bit);
-            self.0 |= p.bits() as usize;
-        }
+        self.0 = page::set_flag(self.0, bit)
     }
 }
 
