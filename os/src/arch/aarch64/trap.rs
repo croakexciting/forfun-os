@@ -1,4 +1,5 @@
 use aarch64_cpu::{asm::barrier, registers::*};
+use tock_registers::interfaces::ReadWriteable;
 use crate::{arch::context::TrapContext, println, syscall::syscall};
 use core::arch::{asm, global_asm};
 
@@ -10,22 +11,23 @@ pub fn init() {
     }
 
     VBAR_EL1.set(__alltraps as u64);
+    CNTP_CTL_EL0.modify(CNTP_CTL_EL0::ENABLE::SET + CNTP_CTL_EL0::IMASK::CLEAR);
     barrier::isb(barrier::SY);
 }
 
 #[no_mangle]
-pub fn current_elx_synchronous(ctx: &mut TrapContext) {
-
+pub fn current_elx_synchronous(_ctx: &mut TrapContext) {
+    println!("current elx sync");
 }
 
 #[no_mangle]
-pub fn current_elx_irq(ctx: &mut TrapContext) {
-
+pub fn current_elx_irq(_ctx: &mut TrapContext) {
+    println!("current elx irq");
 }
 
 #[no_mangle]
-pub fn current_elx_serror(ctx: &mut TrapContext) {
-
+pub fn current_elx_serror(_ctx: &mut TrapContext) {
+    println!("current elx serror");
 }
 
 #[no_mangle]
@@ -45,11 +47,11 @@ pub fn lower_aarch64_synchronous(ctx: &mut TrapContext) -> &mut TrapContext {
 }
 
 #[no_mangle]
-pub fn lower_aarch64_irq(ctx: &mut TrapContext) {
-
+pub fn lower_aarch64_irq(_ctx: &mut TrapContext) {
+    println!("lower aarch64 irq");
 }
 
 #[no_mangle]
-pub fn lower_aarch64_serror(ctx: &mut TrapContext) {
-    
+pub fn lower_aarch64_serror(_ctx: &mut TrapContext) {
+    println!("lower aarch64 serror");
 }

@@ -19,6 +19,7 @@ riscv = { version = "0.10.1", optional = true}
 
 aarch64-cpu = { version = "9.x.x", optional = true}
 tock-registers = { version = "0.8.x", default-features = false, features = ["register_types"], optional = true }
+arm_pl011 = { version = "0.1", optional = true }
 
 [features]
 default = ["aarch64_qemu"]
@@ -26,7 +27,7 @@ default = ["aarch64_qemu"]
 # board select
 riscv64_qemu = ["riscv64"]
 k210 = ["riscv64"]
-aarch64_qemu = ["aarch64"]
+aarch64_qemu = ["aarch64", "arm_pl011"]
 
 # cpu select
 riscv64 = ["riscv", "sbi-rt"]

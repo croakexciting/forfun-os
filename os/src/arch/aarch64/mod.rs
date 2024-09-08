@@ -2,10 +2,7 @@ pub mod trap;
 pub mod context;
 pub mod memory;
 
-use core::{arch::global_asm, hint::spin_loop};
-global_asm!(include_str!("entry.S"));
+use core::arch::global_asm;
 
-pub fn shutdown(_failure: bool) -> ! {
-    spin_loop();
-    unreachable!()
-}
+global_asm!(include_str!("entry.S"));
+global_asm!(include_str!("switch.S"));

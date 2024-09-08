@@ -1,4 +1,15 @@
-TARGET ?= riscv64gc-unknown-none-elf
+ARCH ?= riscv64
+
+ifeq ($(ARCH), riscv64)
+	TARGET = riscv64gc-unknown-none-elf
+	KERNEL_ENTRY = 0x80200000
+	APP_ENTRY = 0x80300000
+else ifeq ($(ARCH), aarch64)
+	TARGET = aarch64-unknown-none
+	KERNEL_ENTRY = 0x40000000
+	APP_ENTRY = 0x40200000
+endif
+
 MODE ?= release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/forfun-os
 KERNEL_BIN := $(KERNEL_ELF).bin
@@ -18,12 +29,23 @@ K210-SERIALPORT ?= /dev/ttyUSB0
 K210-BOARD ?= kd233
 K210_BOOTLOADER_SIZE := 131072
 
-KERNEL_ENTRY := 0x80200000
-APP_ENTRY := 0x81000000
-
 # Binutils
-OBJDUMP := rust-objdump --arch-name=riscv64
-OBJCOPY := rust-objcopy --binary-architecture=riscv64
+OBJDUMP := rust-objdump --arch-name=$(ARCH)
+OBJCOPY := rust-objcopy --binary-architecture=$(ARCH)
+
+ifeq ($(ARCH), riscv64)
+	QEMU_ARGS = -machine virt \
+			 -nographic \
+			 -bios $(BOOTLOADER) \
+			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY) \
+			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY)
+else ifeq ($(ARCH), aarch64)
+	QEMU_ARGS = -machine virt \
+			 -cpu cortex-a72 \
+			 -nographic \
+			 -serial mon:stdio \
+			 -kernel $(KERNEL_ELF)
+endif
 
 build:
 	@echo Platform: $(BOARD)
@@ -33,17 +55,9 @@ build:
 clean:
 	@cargo clean
 
-QEMU_ARGS := -machine virt \
-			 -nographic \
-			 -bios $(BOOTLOADER) \
-			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY) \
-			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY),force-raw=on \
-			 -drive file=../sfs.img,if=none,format=raw,id=x0 \
-			 -device virtio-blk-device,drive=x0 \
-			 
 run:
-ifeq ($(BOARD), qemu)
-	@qemu-system-riscv64 $(QEMU_ARGS)
+ifeq ($(BOARD), qemu) 
+	@qemu-system-$(ARCH) $(QEMU_ARGS)
 else ifeq ($(BOARD), k210)
 	@cp $(BOOTLOADER) $(BOOTLOADER).copy
 	@dd if=$(KERNEL_BIN) of=$(BOOTLOADER).copy bs=$(K210_BOOTLOADER_SIZE) seek=1
@@ -52,9 +66,13 @@ else ifeq ($(BOARD), k210)
 endif
 
 debug: build
-	qemu-system-riscv64 $(QEMU_ARGS) -s -S
+	@qemu-system-$(ARCH) $(QEMU_ARGS) -s -S
 
 gdbclient:
+ifeq ($(ARCH), riscv64)
 	@riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'
+else ifeq ($(ARCH), aarch64)
+	@aarch64-none-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'target remote localhost:1234'
+endif
 
 .PHONY: build clean run debug gdbclient

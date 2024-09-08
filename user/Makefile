@@ -1,15 +1,20 @@
-TARGET ?= riscv64gc-unknown-none-elf
+ARCH ?= riscv64
+
+ifeq ($(ARCH), riscv64)
+	TARGET = riscv64gc-unknown-none-elf
+else ifeq ($(ARCH), aarch64)
+	TARGET = aarch64-unknown-none
+endif
+
 MODE ?= release
 
 ifeq ($(MODE), release)
 	MODE_ARG := --release
 endif
 
-APP_ENTRY := 0x80200000
-
 # Binutils
-OBJDUMP := rust-objdump --arch-name=riscv64
-OBJCOPY := rust-objcopy --binary-architecture=riscv64
+OBJDUMP := rust-objdump --arch-name=$(ARCH)
+OBJCOPY := rust-objcopy --binary-architecture=$(ARCH)
 
 build:
 	@cargo build --target ${TARGET} $(MODE_ARG)

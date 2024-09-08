@@ -11,13 +11,9 @@ pub unsafe fn copy_with_user(to: *mut u8, from: *const u8, n: usize) {
     while remaining > 0 {
         let _byte: u8;
         asm!(
-            "1: cmp {remaining}, #0",
-            "beq 2",
             "ldrb w3, [{src}], #1",
             "strb w3, [{dst}], #1", 
             "subs {remaining}, {remaining}, #1",
-            "bne 1",
-            "2:",
             src = inout(reg) src,
             dst = inout(reg) dst,
             remaining = inout(reg) remaining,

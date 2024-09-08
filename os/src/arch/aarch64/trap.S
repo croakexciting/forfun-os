@@ -32,6 +32,9 @@ __vector_\handler:
 .endm
 
     .section .text
+    .section .text
+    .globl __alltraps
+    .globl __restore
     .align 11
 __alltraps:
 .org 0x000

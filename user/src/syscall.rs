@@ -37,6 +37,7 @@ const SYSCALL_SRV_REPLY: usize = 94;
 
 fn syscall(id: usize, args: [usize; 4]) -> isize {
     let mut ret: isize;
+    #[cfg(feature = "riscv64")]
     unsafe {
         asm!(
             "ecall",
@@ -47,6 +48,19 @@ fn syscall(id: usize, args: [usize; 4]) -> isize {
             in("x17") id
         );
     }
+
+    #[cfg(feature = "aarch64")]
+    unsafe {
+        asm!(
+            "svc #0",
+            inlateout("x0") args[0] => ret,
+            in("x1") args[1],
+            in("x2") args[2],
+            in("x3") args[3],
+            in("x8") id
+        );
+    }
+
     ret
 }
 

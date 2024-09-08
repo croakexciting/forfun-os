@@ -45,3 +45,22 @@ pub fn enable_virtual_mode() {
 pub fn board_init() {
     plic::plic_init();
 }
+
+pub fn shutdown(failure: bool) -> ! {
+    use sbi_rt::{system_reset, NoReason, Shutdown, SystemFailure};
+    if !failure {
+        system_reset(Shutdown, NoReason);
+    } else {
+        system_reset(Shutdown, SystemFailure);
+    }
+    unreachable!()
+}
+
+pub fn console_putchar(c: char) {
+    CONSOLE.exclusive_access().put(c);
+}
+
+pub fn console_getchar() -> u8 {
+    #[allow(deprecated)]
+    sbi_rt::legacy::console_getchar()
+}

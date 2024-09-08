@@ -37,7 +37,7 @@ createfs:
 	./tools/sfs-pack -s ./appbins/ -t ./ create
 
 kill:
-	@pkill -f qemu-system-riscv
+	@pkill -f qemu-system-
 
 docker_start:
 	@bash scripts/start_docker.sh

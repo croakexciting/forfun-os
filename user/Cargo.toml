@@ -12,3 +12,10 @@ spin = "0.9"
 
 [profile.release]
 debug = true
+
+[features]
+default = ["aarch64"]
+
+# cpu select
+riscv64 = []
+aarch64 = []

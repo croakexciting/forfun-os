@@ -193,6 +193,8 @@ bitflags! {
         const W = 1 << 2;
         const X = 1 << 3;
         const U = 1 << 4;
+        // table or block
+        const T = 1 << 5;
     }
 }
 

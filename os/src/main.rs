@@ -7,7 +7,6 @@
 
 mod arch;
 mod board;
-mod sbi;
 
 #[macro_use]
 mod utils;

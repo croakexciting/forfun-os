@@ -69,18 +69,22 @@ pub fn flags(pte: usize) -> Option<PTEFlags> {
     let mut flags = PTEFlags::empty();
     if riscv_flags.contains(RiscvPteFlags::V) {
         flags.insert(PTEFlags::V);
+        flags.insert(PTEFlags::T);
     }
 
     if riscv_flags.contains(RiscvPteFlags::R) {
         flags.insert(PTEFlags::R);
+        flags.remove(PTEFlags::T);
     }
 
     if riscv_flags.contains(RiscvPteFlags::W) {
         flags.insert(PTEFlags::W);
+        flags.remove(PTEFlags::T);
     }
 
     if riscv_flags.contains(RiscvPteFlags::X) {
         flags.insert(PTEFlags::X);
+        flags.remove(PTEFlags::T);
     }
 
     if riscv_flags.contains(RiscvPteFlags::U) {
@@ -93,7 +97,7 @@ pub fn flags(pte: usize) -> Option<PTEFlags> {
 pub fn is_set(pte: usize, flags: PTEFlags) -> bool {
     let mut result = false;
     if let Some(riscv_flags) = RiscvPteFlags::from_bits(pte as u8) {
-        if flags.contains(PTEFlags::V) {
+        if flags.contains(PTEFlags::V) || flags.contains(PTEFlags::T) {
             if riscv_flags.contains(RiscvPteFlags::V) {
                 result = true;
             }
