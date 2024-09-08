@@ -14,7 +14,7 @@ spin = "0.9"
 debug = true
 
 [features]
-default = ["aarch64"]
+default = ["riscv64"]
 
 # cpu select
 riscv64 = []

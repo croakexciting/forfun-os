@@ -1,9 +1,16 @@
 ARCH ?= riscv64
+BOARD ?= riscv64_qemu
+
+ifeq ($(BOARD), riscv64_qemu)
+	ARCH = riscv64
+else ifeq ($(BOARD), aarch64_qemu)
+	ARCH = aarch64
+endif
 
 ifeq ($(ARCH), riscv64)
 	TARGET = riscv64gc-unknown-none-elf
 	KERNEL_ENTRY = 0x80200000
-	APP_ENTRY = 0x80300000
+	APP_ENTRY = 0x81000000
 else ifeq ($(ARCH), aarch64)
 	TARGET = aarch64-unknown-none
 	KERNEL_ENTRY = 0x40000000
@@ -19,16 +26,6 @@ ifeq ($(MODE), release)
 	MODE_ARG := --release
 endif
 
-# board
-BOARD ?= qemu
-SBI ?= rustsbi
-BOOTLOADER := ../bootloader/$(SBI)-$(BOARD).bin
-
-# k210 setting
-K210-SERIALPORT ?= /dev/ttyUSB0
-K210-BOARD ?= kd233
-K210_BOOTLOADER_SIZE := 131072
-
 # Binutils
 OBJDUMP := rust-objdump --arch-name=$(ARCH)
 OBJCOPY := rust-objcopy --binary-architecture=$(ARCH)
@@ -36,9 +33,11 @@ OBJCOPY := rust-objcopy --binary-architecture=$(ARCH)
 ifeq ($(ARCH), riscv64)
 	QEMU_ARGS = -machine virt \
 			 -nographic \
-			 -bios $(BOOTLOADER) \
+			 -bios ../bootloader/rustsbi-qemu.bin \
 			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY) \
-			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY)
+			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY),force-raw=on \
+			 -drive file=../sfs.img,if=none,format=raw,id=x0 \
+			 -device virtio-blk-device,drive=x0
 else ifeq ($(ARCH), aarch64)
 	QEMU_ARGS = -machine virt \
 			 -cpu cortex-a72 \
@@ -49,20 +48,15 @@ endif
 
 build:
 	@echo Platform: $(BOARD)
-	@cargo build --target ${TARGET} $(MODE_ARG)
+	@cargo build --target ${TARGET} $(MODE_ARG) --no-default-features --features ${BOARD}
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary ${KERNEL_BIN}
 
 clean:
 	@cargo clean
 
 run:
-ifeq ($(BOARD), qemu) 
+ifeq ($(findstring qemu, $(BOARD)), qemu)
 	@qemu-system-$(ARCH) $(QEMU_ARGS)
-else ifeq ($(BOARD), k210)
-	@cp $(BOOTLOADER) $(BOOTLOADER).copy
-	@dd if=$(KERNEL_BIN) of=$(BOOTLOADER).copy bs=$(K210_BOOTLOADER_SIZE) seek=1
-	@mv $(BOOTLOADER).copy $(KERNEL_BIN)
-	python3 tools/kflash/kflash.py -p $(K210-SERIALPORT) -b 1500000 -B $(K210-BOARD) -t $(KERNEL_BIN)
 endif
 
 debug: build

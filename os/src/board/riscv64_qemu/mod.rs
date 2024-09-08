@@ -4,7 +4,7 @@ pub mod serial;
 pub mod memory;
 
 use crate::{
-    driver::{self, serial::Uart}, 
+    driver::{self, serial::qemu_serial::Uart}, 
     process, utils::type_extern::RefCellWrap
 };
 use alloc::sync::Arc;
@@ -60,7 +60,7 @@ pub fn console_putchar(c: char) {
     CONSOLE.exclusive_access().put(c);
 }
 
+#[allow(deprecated)]
 pub fn console_getchar() -> u8 {
-    #[allow(deprecated)]
-    sbi_rt::legacy::console_getchar()
+    sbi_rt::legacy::console_getchar() as u8
 }

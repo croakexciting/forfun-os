@@ -16,9 +16,10 @@ pub fn console_getchar() -> u8 {
     peri::console_getchar()
 }
 
-// pub fn external_irq_handler() {
-//     peri::plic::external_irq_handler()
-// }
+#[allow(unused)]
+pub fn external_irq_handler() {
+    peri::plic::external_irq_handler()
+}
 
 pub fn board_init() {
     peri::enable_virtual_mode();

@@ -22,7 +22,7 @@ tock-registers = { version = "0.8.x", default-features = false, features = ["reg
 arm_pl011 = { version = "0.1", optional = true }
 
 [features]
-default = ["aarch64_qemu"]
+default = ["riscv64_qemu"]
 
 # board select
 riscv64_qemu = ["riscv64"]
