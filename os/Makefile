@@ -14,13 +14,13 @@ ifeq ($(ARCH), riscv64)
 else ifeq ($(ARCH), aarch64)
 	TARGET = aarch64-unknown-none
 	KERNEL_ENTRY = 0x40000000
-	APP_ENTRY = 0x40200000
+	APP_ENTRY = 0x41000000
 endif
 
 MODE ?= release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/forfun-os
 KERNEL_BIN := $(KERNEL_ELF).bin
-APP_BIN := ../user/target/$(TARGET)/$(MODE)/filesystem
+APP_BIN := ../user/target/$(TARGET)/$(MODE)/hello_world
 
 ifeq ($(MODE), release)
 	MODE_ARG := --release
@@ -43,7 +43,8 @@ else ifeq ($(ARCH), aarch64)
 			 -cpu cortex-a72 \
 			 -nographic \
 			 -serial mon:stdio \
-			 -kernel $(KERNEL_ELF)
+			 -kernel $(KERNEL_ELF) \
+			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY),force-raw=on
 endif
 
 build:

@@ -22,3 +22,6 @@ pub const DMA_END_ADDR: usize = 0x8700_0000;
 // peripheral area - Defined
 pub const PERIPHERAL_START_ADDR: usize = 0x9000_0000;
 pub const PERIPHERAL_END_ADDR: usize = 0xA000_0000;
+
+// initproc load addr
+pub const INITPROC_LOAD_ADDR: usize = 0x8100_0000;

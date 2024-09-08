@@ -11,7 +11,7 @@ pub fn init() {
     }
 
     VBAR_EL1.set(__alltraps as u64);
-    CNTP_CTL_EL0.modify(CNTP_CTL_EL0::ENABLE::SET + CNTP_CTL_EL0::IMASK::CLEAR);
+    // CNTP_CTL_EL0.modify(CNTP_CTL_EL0::ENABLE::SET + CNTP_CTL_EL0::IMASK::CLEAR);
     barrier::isb(barrier::SY);
 }
 

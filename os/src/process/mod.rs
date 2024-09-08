@@ -10,7 +10,10 @@ use app::*;
 use spin::mutex::Mutex;
 
 use crate::{
-    arch::memory::page::{VirtAddr, VirtPage}, mm::area::UserBuffer, utils::type_extern::RefCellWrap
+    arch::memory::page::{VirtAddr, VirtPage}, 
+    board::peri::memory::INITPROC_LOAD_ADDR, 
+    mm::area::UserBuffer, 
+    utils::type_extern::RefCellWrap
 };
 
 use lazy_static::*;
@@ -21,7 +24,7 @@ lazy_static! {
 
 // Default create the first app, other app created by manual
 pub fn create_proc() -> isize {
-    let elf = unsafe { core::slice::from_raw_parts(0x8100_0000 as *mut u8, 4096 * 100) };
+    let elf = unsafe { core::slice::from_raw_parts(INITPROC_LOAD_ADDR as *mut u8, 4096 * 100) };
     TASK_MANAGER.create_initproc(5, elf)
 }
 
