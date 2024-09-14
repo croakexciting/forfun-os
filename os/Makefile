@@ -40,7 +40,8 @@ ifeq ($(ARCH), riscv64)
 			 -device virtio-blk-device,drive=x0
 else ifeq ($(ARCH), aarch64)
 	QEMU_ARGS = -machine virt \
-			 -cpu cortex-a72 \
+			 -cpu cortex-a53 \
+			 -d mmu \
 			 -nographic \
 			 -serial mon:stdio \
 			 -kernel $(KERNEL_ELF) \

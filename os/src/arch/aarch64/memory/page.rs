@@ -1,18 +1,19 @@
 use core::arch::asm;
-use aarch64_cpu::registers::*;
+
+use aarch64_cpu::{asm::barrier, registers::*};
 use tock_registers::interfaces::ReadWriteable;
 
-use crate::arch::memory::page::PTEFlags;
+use crate::{arch::memory::page::PTEFlags, println};
 
 pub const PAGE_SIZE: usize = 0x1000;
 pub const PN_BITSIZE: usize = 9;
-pub const PN_LEVEL_NUM: usize = 4;
+pub const PN_LEVEL_NUM: usize = 3;
 pub const INPAGE_OFFSET_WIDTH: usize = 12;
-pub const PA_VALID_WIDTH: usize = 32;
+pub const PA_VALID_WIDTH: usize = 44;
 pub const VA_VALID_WIDTH: usize = 39;
 
 // arm64 physical page width set to 36
-pub const PPN_VALID_WIDTH: usize = 20;
+pub const PPN_VALID_WIDTH: usize = 32;
 // use three level pte
 pub const VPN_VALID_WIDTH: usize = 27;
 
@@ -21,15 +22,121 @@ pub fn root_ppn() -> usize {
 }
 
 pub fn enable_va(id: usize, ppn: usize) {
-    let ttbr0_el1 = (id << 56) | (ppn & 0x0000_FFFF_FFFF_F000);
+    if !ID_AA64MMFR0_EL1.matches_all(ID_AA64MMFR0_EL1::TGran4::Supported) {
+        let mut x = 0;
+        x += 1;
+    }
+
     unsafe {
         asm!(
-            "msr ttbr0_el1, {0}",
-            in(reg) ttbr0_el1,
-            options(nostack, preserves_flags),
+            "at S1E1R, {0}",
+            "dsb ishst",
+            "tlbi vmalle1",
+            "dsb ish",
+            "dmb ish",
+            "isb",
+            "at S1E1R, {0}",
+            in(reg) 0x4000_0000,
+            options(nostack),
         );
-        SCTLR_EL1.modify(SCTLR_EL1::M::Enable + SCTLR_EL1::C::Cacheable + SCTLR_EL1::I::Cacheable);
     }
+
+    // if !ID_AA64MMFR0_EL1.matches_all(ID_AA64MMFR0_EL1::TGran4::Supported) {
+    //     let mut x = 0;
+    //     x += 1;
+    // }
+
+    // if !ID_AA64MMFR0_EL1.matches_all(ID_AA64MMFR0_EL1::PARange::Bits_48) {
+    //     let mut x = 0;
+    //     x += 1;
+    // }
+
+    // if !ID_AA64MMFR0_EL1.matches_all(ID_AA64MMFR0_EL1::PARange::Bits_52) {
+    //     let mut x = 0;
+    //     x += 1;
+    // }
+
+    // if !ID_AA64MMFR0_EL1.matches_all(ID_AA64MMFR0_EL1::PARange::Bits_32) {
+    //     let mut x = 0;
+    //     x += 1;
+    // }
+
+    // if !ID_AA64MMFR0_EL1.matches_all(ID_AA64MMFR0_EL1::PARange::Bits_36) {
+    //     let mut x = 0;
+    //     x += 1;
+    // }
+
+    // if !ID_AA64MMFR0_EL1.matches_all(ID_AA64MMFR0_EL1::PARange::Bits_42) {
+    //     let mut x = 0;
+    //     x += 1;
+    // }
+
+    // if !ID_AA64MMFR0_EL1.matches_all(ID_AA64MMFR0_EL1::PARange::Bits_44) {
+    //     let mut x = 0;
+    //     x += 1;
+    // }
+
+    MAIR_EL1.write(
+        MAIR_EL1::Attr1_Normal_Outer::WriteBack_NonTransient_ReadWriteAlloc
+        + MAIR_EL1::Attr1_Normal_Inner::WriteBack_NonTransient_ReadWriteAlloc
+        + MAIR_EL1::Attr0_Device::nonGathering_nonReordering_EarlyWriteAck
+    );
+
+    TTBR0_EL1.set(
+        (ppn << 12) as u64 as _
+    );
+
+    TCR_EL1.write(
+        TCR_EL1::T0SZ.val(25)
+        // + TCR_EL1::TBI0::Used
+        + TCR_EL1::IPS::Bits_44
+        + TCR_EL1::TG0::KiB_4
+        + TCR_EL1::SH0::Inner
+        + TCR_EL1::ORGN0::WriteBack_ReadAlloc_WriteAlloc_Cacheable
+        + TCR_EL1::IRGN0::WriteBack_ReadAlloc_WriteAlloc_Cacheable
+        + TCR_EL1::EPD0::EnableTTBR0Walks
+        // + TCR_EL1::A1::TTBR0
+        // + TCR_EL1::EPD1::DisableTTBR1Walks
+    );
+
+    unsafe {
+        asm!(
+            "at S1E1R, {0}",
+            "tlbi vmalle1",
+            "dsb sy",
+            "isb",
+            "at S1E1R, {0}",
+            in(reg) 0x4_0000,
+            options(nostack),
+        );
+    }
+    
+    unsafe {
+        asm!(
+            "at S1E1R, {0}",
+            "dsb ishst",
+            "tlbi vmalle1",
+            "dsb ish",
+            "dmb ish",
+            "isb",
+            "at S1E1R, {0}",
+            in(reg) 0x4038_0000,
+            options(nostack),
+        );
+    }
+    
+    barrier::isb(barrier::SY);
+    SCTLR_EL1.modify(SCTLR_EL1::M::Enable + SCTLR_EL1::C::Cacheable + SCTLR_EL1::I::Cacheable);
+    barrier::isb(barrier::SY);
+    // unsafe {
+    //     asm!(
+    //         "MRS X0, SCTLR_EL1",
+    //         "ORR X0, X0, #1",
+    //         "MSR SCTLR_EL1, X0",
+    //         "DSB SY",
+    //         "ISB"
+    //     );
+    // }
 }
 
 pub fn pte(ppn: usize, flags: PTEFlags) -> usize {
@@ -39,8 +146,10 @@ pub fn pte(ppn: usize, flags: PTEFlags) -> usize {
 
     // table or block
     if flags.contains(PTEFlags::T) {
-        pte |= (0x1 << 1) as usize
+        pte |= (0x1 << 1) as usize;
     }
+
+    // pte |= (0x1 << 2) as usize;
 
     // read/write permissions
     if flags.contains(PTEFlags::U) {
@@ -57,20 +166,23 @@ pub fn pte(ppn: usize, flags: PTEFlags) -> usize {
         }
     }
 
+    // pte |= (0b11 << 8) as usize;
+    // pte |= (0x1 << 10) as usize;
+
     // add ppn
     let mppn = ppn &  0x0000_0000_000F_FFFF;
     pte |= (mppn << 12) as usize;
 
     // add execute permissions
-    if flags.contains(PTEFlags::X) {
-        if flags.contains(PTEFlags::U) {
-            pte |= (0usize << 53) as usize
-        } else {
-            pte |= (2usize << 53) as usize
-        }
-    } else {
-        pte |= (3usize << 53) as usize
-    }
+    // if flags.contains(PTEFlags::X) {
+    //     if flags.contains(PTEFlags::U) {
+    //         pte |= (0usize << 53) as usize
+    //     } else {
+    //         pte |= (2usize << 53) as usize
+    //     }
+    // } else {
+    //     pte |= (3usize << 53) as usize
+    // }
 
     pte
 }

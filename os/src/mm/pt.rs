@@ -51,8 +51,8 @@ impl PageTable {
             } else {
                 if !pte.is_valid() {
                     let frame = kernel_frame_alloc().unwrap();
-                    // 创建一个树干页表，只需要 valid flag 即可
-                    *pte = PageTableEntry::new(frame.ppn, PTEFlags::V);
+                    // 创建一个树干页表
+                    *pte = PageTableEntry::new(frame.ppn, PTEFlags::V | PTEFlags::T);
                     self.frames.push(frame);
                 }
             }
