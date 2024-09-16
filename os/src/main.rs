@@ -17,10 +17,8 @@ mod ipc;
 mod mm;
 mod process;
 mod syscall;
-use core::arch::asm;
 
 extern crate alloc;
-use arch::memory::page::enable_va;
 use board::board_init;
 use linked_list_allocator::LockedHeap;
 use process::{create_proc, run_tasks};
@@ -67,10 +65,9 @@ pub fn init_heap() {
 #[no_mangle]
 pub fn os_main() -> ! {
     clear_bss();
-    // enable_va(0, 0);
     init_heap();
     arch::init();
-    // timer::set_trigger();
+    timer::set_trigger();
     create_proc();
     board_init();
     run_tasks();

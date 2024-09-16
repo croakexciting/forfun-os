@@ -1,5 +1,4 @@
 use aarch64_cpu::{asm::barrier, registers::*};
-use tock_registers::interfaces::ReadWriteable;
 use crate::{arch::context::TrapContext, println, syscall::syscall};
 use core::arch::{asm, global_asm};
 
