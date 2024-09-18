@@ -72,7 +72,6 @@ __alltraps:
 .org 0x800
 
 __restore:
-    mov     sp, x0
     ldp     x10, x9,    [sp, #16 * 16]
     ldp     lr, x11,    [sp, #16 * 15]
     msr     SPSR_EL1,   x10

@@ -57,23 +57,24 @@ pub fn pte(ppn: usize, flags: PTEFlags) -> usize {
         pte |= (0x1 << 2) as usize;
         pte |= (0b11 << 8) as usize;
         pte |= (0b1 << 10) as usize;    
+    } else {
+        pte |= (3usize << 53) as usize
     }
-
-    // pte |= (0x1 << 2) as usize;
 
     // read/write permissions
     if flags.contains(PTEFlags::U) {
-        if flags.contains(PTEFlags::R) {
-            if flags.contains(PTEFlags::W) {
-                pte |= (0b10 << 6) as usize
-            } else {
-                pte |= (0b01 << 6) as usize
-            }
-        }
+        // if flags.contains(PTEFlags::R) {
+        //     if flags.contains(PTEFlags::W) {
+        //         pte |= (0b01 << 6) as usize
+        //     } else {
+        //         pte |= (0b10<< 6) as usize
+        //     }
+        // }
+        pte |= (0b01 << 6) as usize
     } else {
-        if flags.contains(PTEFlags::R) && !flags.contains(PTEFlags::W) {
-            pte |= (0b11 << 6) as usize
-        }
+        // if flags.contains(PTEFlags::R) && !flags.contains(PTEFlags::W) {
+        //     pte |= (0b11 << 6) as usize
+        // }
     }
 
     // add ppn
@@ -81,15 +82,15 @@ pub fn pte(ppn: usize, flags: PTEFlags) -> usize {
     pte |= (mppn << 12) as usize;
 
     // add execute permissions
-    if flags.contains(PTEFlags::X) {
-        if flags.contains(PTEFlags::U) {
-            pte |= (0usize << 53) as usize
-        } else {
-            pte |= (2usize << 53) as usize
-        }
-    } else {
-        pte |= (3usize << 53) as usize
-    }
+    // if flags.contains(PTEFlags::X) {
+    //     if flags.contains(PTEFlags::U) {
+    //         pte |= (0usize << 53) as usize
+    //     } else {
+    //         pte |= (2usize << 53) as usize
+    //     }
+    // } else {
+    //     pte |= (3usize << 53) as usize
+    // }
 
     pte
 }
