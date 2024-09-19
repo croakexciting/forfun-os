@@ -23,7 +23,7 @@ pub fn enable_va(id: usize, ppn: usize) {
     MAIR_EL1.write(
         MAIR_EL1::Attr1_Normal_Outer::WriteBack_NonTransient_ReadWriteAlloc
         + MAIR_EL1::Attr1_Normal_Inner::WriteBack_NonTransient_ReadWriteAlloc
-        + MAIR_EL1::Attr0_Device::nonGathering_nonReordering_EarlyWriteAck
+        // + MAIR_EL1::Attr0_Device::nonGathering_nonReordering_EarlyWriteAck
     );
 
     TTBR0_EL1.write(TTBR0_EL1::ASID.val(id as u64) + TTBR0_EL1::BADDR.val((ppn << 11) as u64));
@@ -63,18 +63,11 @@ pub fn pte(ppn: usize, flags: PTEFlags) -> usize {
 
     // read/write permissions
     if flags.contains(PTEFlags::U) {
-        // if flags.contains(PTEFlags::R) {
-        //     if flags.contains(PTEFlags::W) {
-        //         pte |= (0b01 << 6) as usize
-        //     } else {
-        //         pte |= (0b10<< 6) as usize
-        //     }
-        // }
-        pte |= (0b01 << 6) as usize
-    } else {
-        // if flags.contains(PTEFlags::R) && !flags.contains(PTEFlags::W) {
-        //     pte |= (0b11 << 6) as usize
-        // }
+        pte |= (0b1 << 6) as usize
+    }
+
+    if !flags.contains(PTEFlags::W) {
+        pte |= (0b1 << 7) as usize
     }
 
     // add ppn
@@ -82,15 +75,15 @@ pub fn pte(ppn: usize, flags: PTEFlags) -> usize {
     pte |= (mppn << 12) as usize;
 
     // add execute permissions
-    // if flags.contains(PTEFlags::X) {
-    //     if flags.contains(PTEFlags::U) {
-    //         pte |= (0usize << 53) as usize
-    //     } else {
-    //         pte |= (2usize << 53) as usize
-    //     }
-    // } else {
-    //     pte |= (3usize << 53) as usize
-    // }
+    if flags.contains(PTEFlags::X) {
+        if flags.contains(PTEFlags::U) {
+            pte |= (0usize << 53) as usize
+        } else {
+            pte |= (2usize << 53) as usize
+        }
+    } else {
+        pte |= (3usize << 53) as usize
+    }
 
     pte
 }
@@ -145,19 +138,11 @@ pub fn is_set(pte: usize, flags: PTEFlags) -> bool {
     }
 
     if flags.contains(PTEFlags::W) {
-        let ap = (pte & (3usize << 6)) >> 6;
-        if ap == 0 || ap == 2 {
+        let ap = (pte & (1usize << 7)) >> 7;
+        if ap == 0 {
             result = true
         }
     }
-
-    // if flags.contains(PTEFlags::U) {
-    //     let ap = (pte & (3usize << 6)) >> 6;
-    //     let x = (pte & 3usize << 53) >> 53;
-    //     if (ap == 1 || ap == 2) && x == 0 {
-    //         result = true
-    //     }
-    // }
 
     if flags.contains(PTEFlags::X) {
         let x = (pte & 3usize << 53) >> 53;
@@ -177,17 +162,8 @@ pub fn set_flag(pte: usize, f: PTEFlags) -> usize {
         p |= 0x1;
     }
 
-    if f.contains(PTEFlags::T) {
-        p |= (0x1 << 1) as usize
-    }
-
     if f.contains(PTEFlags::W) {
-        if !current_flags.contains(PTEFlags::U) {
-            p &= !((0b11 << 6) as usize);
-        } else {
-            p &= !((0b11 << 6) as usize);
-            p |= (0b10 << 6) as usize;
-        }
+        p &= !((0b1 << 7) as usize);
     }
 
     if f.contains(PTEFlags::R) {

@@ -67,7 +67,7 @@ pub fn os_main() -> ! {
     clear_bss();
     init_heap();
     arch::init();
-    // timer::set_trigger();
+    timer::set_trigger();
     create_proc();
     board_init();
     run_tasks();
