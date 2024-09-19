@@ -13,6 +13,10 @@ impl TrapContext {
     }
 }
 
+extern "C" {
+    pub fn __restore(ctx_addr: usize);
+}
+
 #[derive(Clone)]
 #[repr(C)]
 pub struct SwitchContext {
@@ -45,20 +49,12 @@ impl SwitchContext {
     }
 
     pub fn new_with_restore_addr(sp: usize) -> Self {
-        extern "C" {
-            fn __restore();
-        }
-
         Self::new(__restore as usize, sp)
     }
 
     pub fn new_with_restore_addr_and_kernel_stack_sp(
         kernel_stack_start_addr: usize
     ) -> Self {
-        extern "C" {
-            fn __restore();
-        }
-
         let sp: usize = kernel_stack_start_addr - core::mem::size_of::<TrapContext>();
         Self::new(__restore as usize, sp)
     }

@@ -1,4 +1,9 @@
 [target.riscv64gc-unknown-none-elf]
 rustflags = [
-    "-Clink-arg=-Tsrc/linker.ld", "-Cforce-frame-pointers=yes"
+    "-Clink-arg=-Tsrc/linker-riscv64.ld", "-Cforce-frame-pointers=yes"
+]
+
+[target.aarch64-unknown-none]
+rustflags = [
+    "-Clink-arg=-Tsrc/linker-aarch64.ld", "-Cforce-frame-pointers=yes"
 ]

@@ -8,10 +8,13 @@ APPBINS_DIR="${CURR_DIR}/../appbins"
 function main() {
     local target=$1
     local mode=$2
+    local arch=$3
+
+    echo "$target $mode $arch"
 
     # make apps
     pushd ${APP_SRC_DIR} > /dev/null
-    make build
+    make ARCH=$arch build
     popd > /dev/null
 
     if [ ! -d ${APPBINS_DIR} ]; then

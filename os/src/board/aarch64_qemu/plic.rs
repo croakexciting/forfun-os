@@ -1,0 +1,1 @@
+pub fn external_irq_handler() {}

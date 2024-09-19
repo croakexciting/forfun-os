@@ -7,7 +7,6 @@
 
 mod arch;
 mod board;
-mod sbi;
 
 #[macro_use]
 mod utils;
@@ -20,7 +19,6 @@ mod process;
 mod syscall;
 
 extern crate alloc;
-use arch::irq;
 use board::board_init;
 use linked_list_allocator::LockedHeap;
 use process::{create_proc, run_tasks};
@@ -68,7 +66,7 @@ pub fn init_heap() {
 pub fn os_main() -> ! {
     clear_bss();
     init_heap();
-    irq::init();
+    arch::init();
     timer::set_trigger();
     create_proc();
     board_init();

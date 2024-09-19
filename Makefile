@@ -1,5 +1,13 @@
 TARGET ?= riscv64gc-unknown-none-elf
 MODE ?= release
+ARCH ?= riscv64
+BOARD ?= riscv64_qemu
+
+ifeq ($(BOARD), riscv64_qemu)
+	ARCH = riscv64
+else ifeq ($(BOARD), aarch64_qemu)
+	ARCH = aarch64
+endif
 
 .PHONY: build_kernel clean_kernel debug gdbclient \
 		build_user clean_user \
@@ -31,13 +39,13 @@ gdbclient:
 	${MAKE} -C os gdbclient
 
 createfs:
-	@bash scripts/install_apps.sh ${TARGET} ${MODE}
+	@bash scripts/install_apps.sh ${TARGET} ${MODE} ${ARCH}
 	@rm -f sfs.img
 	@qemu-img create -f raw sfs.img 512M
 	./tools/sfs-pack -s ./appbins/ -t ./ create
 
 kill:
-	@pkill -f qemu-system-riscv
+	@pkill -f qemu-system-
 
 docker_start:
 	@bash scripts/start_docker.sh
