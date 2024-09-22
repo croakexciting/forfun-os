@@ -21,7 +21,7 @@ mod syscall;
 extern crate alloc;
 use board::board_init;
 use linked_list_allocator::LockedHeap;
-use process::{create_proc, run_tasks};
+use process::{create_proc, kernel_init, run_tasks};
 use crate::board::timer;
 
 fn clear_bss() {
@@ -68,7 +68,8 @@ pub fn os_main() -> ! {
     init_heap();
     arch::init();
     timer::set_trigger();
-    create_proc();
+    kernel_init();
     board_init();
+    create_proc();
     run_tasks();
 }

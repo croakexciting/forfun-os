@@ -5,7 +5,7 @@ use spin::mutex::Mutex;
 
 use crate::mm::area::UserBuffer;
 
-use crate::file::File;
+use crate::file::{File, FileError};
 
 pub struct Pipe {
     readable: bool,
@@ -33,16 +33,26 @@ impl File for Pipe {
         self.writable
     }
 
-    fn read(&self, buf: &mut UserBuffer) -> isize {
-        self.buffer.lock().read(buf.buffer) as isize
+    fn read(&self, buf: &mut UserBuffer) -> Result<usize, FileError> {
+        Ok(self.buffer.lock().read(buf.buffer))
     }
 
-    fn write(&self, buf: &UserBuffer) -> isize {
-        self.buffer.lock().write(buf.buffer) as isize
+    fn write(&self, buf: &UserBuffer) -> Result<usize, FileError> {
+        Ok(self.buffer.lock().write(buf.buffer))
     }
 
     fn lseek(&self, offset: usize) -> isize {
         offset as isize
+    }
+
+    fn size(&self) -> Result<usize, FileError> {
+        let head = self.buffer.lock().head;
+        let tail = self.buffer.lock().tail;
+        if head < tail {
+            return Ok(tail - head);
+        } else {
+            return Ok(self.buffer.lock().buffer.len() - head + tail)
+        }
     }
 }
 

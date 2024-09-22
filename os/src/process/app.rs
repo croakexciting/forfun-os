@@ -5,7 +5,8 @@ use core::ops::{BitAnd, BitOr};
 
 use crate::driver::block::qemu_blk::{self, QemuBlk};
 use crate::driver::block::BlockDevice;
-use crate::file::qemu_blk::QemuBlkFile;
+use crate::file::fs::FILESYSTEM;
+// use crate::file::qemu_blk::QemuBlkFile;
 use crate::ipc::id::RcvidHandler;
 use crate::ipc::server::{Msg, Server};
 use crate::ipc::pipe::Pipe;
@@ -16,6 +17,7 @@ use crate::ipc::shm::Shm;
 use crate::mm::allocator::{asid_alloc, AisdHandler};
 use crate::mm::area::UserBuffer;
 use crate::arch::memory::page::{enable_va, PhysAddr, VirtAddr, VirtPage, PAGE_SIZE};
+use crate::mm::pt::PageTable;
 use crate::mm::MemoryManager;
 use crate::arch::context::__switch;
 use crate::arch::context::TrapContext;
@@ -157,9 +159,14 @@ impl TaskManager {
         inner.exec(elf)
     }
 
-    pub fn create_initproc(&self, tick: usize, elf: &[u8]) -> isize {
+    pub fn kernel_init(&self) -> isize {
         let mut inner = self.inner_access();
-        inner.create_initproc(tick, elf)
+        inner.kernel_init()
+    }
+
+    pub fn create_initproc(&self, tick: usize) -> isize {
+        let mut inner = self.inner_access();
+        inner.create_initproc(tick)
     }
 
     pub fn cow(&self, vpn: VirtPage) -> Result<(), &'static str> {
@@ -209,6 +216,11 @@ impl TaskManager {
     pub fn lseek(&self, fd: usize, seek: usize) -> isize {
         let mut inner = self.inner_access();
         inner.lseek(fd, seek)
+    }
+
+    pub fn filesize(&self, fd: usize) -> isize {
+        let mut inner = self.inner_access();
+        inner.filesize(fd)
     }
 
     pub fn sigaction(&self, signal: usize, handler: usize) -> isize {
@@ -368,6 +380,9 @@ pub struct AppManagerInner {
     named_srv: BTreeMap<String, Arc<Mutex<Server>>>,
     srv_conn: BTreeMap<usize, Weak<Mutex<Server>>>,
     session: BTreeMap<usize, Weak<Mutex<Server>>>,
+
+    // store a memory manager for kernel
+    kernel_mm: MemoryManager,
 }
 
 impl AppManagerInner {
@@ -384,6 +399,7 @@ impl AppManagerInner {
             named_srv: BTreeMap::new(),
             srv_conn: BTreeMap::new(),
             session: BTreeMap::new(),
+            kernel_mm: MemoryManager::new(true),
         }
     }
 
@@ -403,21 +419,42 @@ impl AppManagerInner {
         &mut self.idle_ctx as *mut _
     }
 
-    // return app id, if create failed, return -1
-    // only initproc is created, other's created by fork
-    pub fn create_initproc(&mut self, tick: usize, elf_data: &[u8]) -> isize {
-        // just add a process at the tail
-        let mut initproc = Process::new(tick);
-        // initialize kernel pt
-        if let None = initproc.mm.init_kernel_area() {
+    pub fn kernel_init(&mut self) -> isize {
+        if let None = self.kernel_mm.init_kernel_area() {
             println!("[kernel] initproc create kernel pagetable failed");
             return -1;
         }
+
+        enable_va(0, self.kernel_mm.root_ppn().0);
+        0
+    }
+
+    // return app id, if create failed, return -1
+    // only initproc is created, other's created by fork
+    pub fn create_initproc(&mut self, tick: usize) -> isize {
+        // just add a process at the tail
+        let mut initproc = Process::new(tick);
+        // initialize kernel pt
+        if let None = initproc.mm.add_kernel_pt(&mut self.kernel_mm) {
+            println!("[kernel] initproc add kernel pagetable failed");
+            return -1;
+        }
+        // read elf from fs
+        let fd = initproc.open("hello_world");
+        if fd < 0 {
+            println!("[kernel] open file failed");
+            return -2;
+        }
+        let mut size = initproc.filesize(fd as usize);
+        let mut buf: Vec<u8> = Vec::new();
+        buf.resize(size as usize, 0);
+        size = initproc.read(fd as usize, buf.as_mut_ptr(), size as usize);
+
         // load elf
-        let r = initproc.load_elf(elf_data);
+        let r = initproc.load_elf(&mut self.kernel_mm.pt, buf.as_slice());
         if let Err(e) = r {
             println!("[kernel] initproc load elf error: {}", e);
-            return -2;
+            return -3;
         }
         println!("[kernel] initproc load elf success");
         let initproc_arc = Arc::new(Mutex::new(initproc));
@@ -509,6 +546,10 @@ impl AppManagerInner {
         self.current_task(true).unwrap().lock().lseek(fd, seek)
     }
 
+    pub fn filesize(&mut self, fd: usize) -> isize{
+        self.current_task(true).unwrap().lock().filesize(fd)
+    }
+
     pub fn sigaction(&mut self, signal: usize, handler: usize) -> isize {
         self.current_task(true).unwrap().lock().sigaction(signal, SignalAction::new(signal, handler))
     }
@@ -562,7 +603,7 @@ impl AppManagerInner {
     }
     
     pub fn map_peripheral(&mut self, pa: usize, size: usize) -> isize {
-        self.current_task(true).unwrap().lock().map_peripheral(pa.into(), size)
+        self.kernel_mm.map_peripheral(pa.into(), size)
     }
 
     pub fn create_or_open_shm(&mut self, name: String, pn: usize, permission: usize) -> isize {
@@ -758,7 +799,7 @@ impl Process {
             parent: None,
             children: BTreeMap::new(),
             ctx: SwitchContext::bare(),
-            mm: MemoryManager::new(),
+            mm: MemoryManager::new(false),
             asid: asid_alloc().unwrap(),
             fds: vec![
                 // 0 -> stdin
@@ -776,7 +817,7 @@ impl Process {
     }
 
     pub fn fork(&mut self) -> (Weak<Mutex<Self>>, usize) {
-        let mut mm = MemoryManager::new();
+        let mut mm = MemoryManager::new(false);
         mm.fork(&mut self.mm);
         let switch_ctx = SwitchContext::new_with_restore_addr_and_kernel_stack_sp(
             crate::board::peri::memory::KERNEL_STACK_START
@@ -815,7 +856,9 @@ impl Process {
     pub fn exec(&mut self, elf: &[u8]) -> Result<(), &'static str> {
         // unmap all app area, for load elf again
         self.mm.unmap_app();
-        let (sp, pc) = self.mm.load_elf(&elf, true)?;
+        let mut empty = PageTable::new();
+        let (sp, pc) = self.mm.load_elf(&mut empty, &elf, true)?;
+        drop(empty);
         let trap_ctx = TrapContext::new(pc, sp);
         let kernel_sp = self.mm.runtime_push_context(trap_ctx);
         self.ctx = SwitchContext::new_with_restore_addr(kernel_sp);
@@ -855,16 +898,16 @@ impl Process {
         self.ctx.borrow_mut() as *mut _
     }
     
-    pub fn load_elf(&mut self, data: &[u8]) -> Result<(), &'static str> {
+    pub fn load_elf(&mut self, current_pt: &mut PageTable, data: &[u8]) -> Result<(), &'static str> {
         // 解析 elf 文件到 mm 中
         // 请注意，这里的 sp 是用户栈 sp，而不是 app 对应的内核栈的 app
-        let (sp, pc) = self.mm.load_elf(data, false)?;
+        let (sp, pc) = self.mm.load_elf(current_pt, data, false)?;
 
         // 根据获取的 app pc 和 sp 创建 TrapContext
         let trap_ctx = TrapContext::new(pc, sp);
 
         // 将 TrapContext push 到 kernel stack 中，并且更新 switch context
-        let kernel_sp = self.mm.push_context(trap_ctx);
+        let kernel_sp = self.mm.push_context(trap_ctx, current_pt);
         self.ctx = SwitchContext::new_with_restore_addr(kernel_sp);
 
         self.set_status(ProcessStatus::READY);
@@ -874,13 +917,15 @@ impl Process {
     pub fn runtime_load_elf(&mut self, data: &[u8]) -> Result<(), &'static str> {
         // 解析 elf 文件到 mm 中
         // 请注意，这里的 sp 是用户栈 sp，而不是 app 对应的内核栈的 app
-        let (sp, pc) = self.mm.load_elf(data, true)?;
+        let mut empty = PageTable::new();
+        let (sp, pc) = self.mm.load_elf(&mut empty, data, true)?;
 
         // 根据获取的 app pc 和 sp 创建 TrapContext
         let trap_ctx = TrapContext::new(pc, sp);
 
         // 将 TrapContext push 到 kernel stack 中，并且更新 switch context
-        let kernel_sp = self.mm.push_context(trap_ctx);
+        let kernel_sp = self.mm.push_context(trap_ctx, &mut empty);
+        drop(empty);
         self.ctx = SwitchContext::new_with_restore_addr(kernel_sp);
 
         self.set_status(ProcessStatus::READY);
@@ -902,7 +947,8 @@ impl Process {
         let user_buf = UserBuffer::new_from_raw(buf, len);
         if let Some(file) = &self.fds[fd] {
             if file.writable() {
-                return file.write(&user_buf) as isize;
+                // TODO: return relative error code
+                return file.write(&user_buf).unwrap() as isize;
             } else {
                 println!("[kernel] {} file is None", fd);
                 return -1;
@@ -926,7 +972,7 @@ impl Process {
         let mut user_buf = UserBuffer::new_from_raw(buf, len);
         if let Some(file) = &self.fds[fd] {
             if file.readable() {
-                return file.read(&mut user_buf) as isize;
+                return file.read(&mut user_buf).unwrap() as isize;
             } else {
                 println!("[kernel] {} file is None", fd);
                 return -1;
@@ -938,19 +984,30 @@ impl Process {
     }
 
     pub fn open(&mut self, name: &str) -> isize {
-        match name {
-            "qemu-blk" => {
-                let blk = Arc::new(QemuBlkFile::new());
-                self.fds.push(Some(blk));
-                (self.fds.len() - 1) as isize
-            },
-            _ => -1,
+        if let Some(inode) = FILESYSTEM.exclusive_access().open(name) {
+            self.fds.push(Some(inode));
+            return (self.fds.len() - 1) as isize
         }
+
+        -1
     }
 
     pub fn lseek(&mut self, fd: usize, seek: usize) -> isize {
         if let Some(file) = &self.fds[fd] {
             return file.lseek(seek)
+        }
+
+        println!("[kernel] {} file not in fd table", fd);
+        return -2;
+    }
+
+    pub fn filesize(&mut self, fd: usize) -> isize {
+        if let Some(file) = &self.fds[fd] {
+            if let Ok(size) = file.size() {
+                return size as isize;
+            } else {
+                return -1;
+            }
         }
 
         println!("[kernel] {} file not in fd table", fd);
@@ -1024,10 +1081,6 @@ impl Process {
 
     pub fn mmap_with_addr(&mut self, pa: PhysAddr, size: usize, permission: usize, user: bool) -> isize {
         self.mm.mmap_with_addr(pa, size, permission, user)
-    }
-
-    pub fn map_peripheral(&mut self, pa: PhysAddr, size: usize) -> isize {
-        self.mm.map_peripheral(pa, size)
     }
 }
 

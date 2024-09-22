@@ -24,8 +24,12 @@ lazy_static! {
 
 // Default create the first app, other app created by manual
 pub fn create_proc() -> isize {
-    let elf = unsafe { core::slice::from_raw_parts(INITPROC_LOAD_ADDR as *mut u8, 4096 * 100) };
-    TASK_MANAGER.create_initproc(5, elf)
+    // let elf = unsafe { core::slice::from_raw_parts(INITPROC_LOAD_ADDR as *mut u8, 4096 * 100) };
+    TASK_MANAGER.create_initproc(5)
+}
+
+pub fn kernel_init() -> isize {
+    TASK_MANAGER.kernel_init()
 }
 
 pub fn run_tasks() -> ! {
@@ -80,6 +84,10 @@ pub fn open(name: String) -> isize {
 
 pub fn lseek(fd: usize, seek: usize) -> isize {
     TASK_MANAGER.lseek(fd, seek)
+}
+
+pub fn filesize(fd: usize) -> isize {
+    TASK_MANAGER.filesize(fd)
 }
 
 pub fn sigaction(signal: usize, handler: usize) -> isize {

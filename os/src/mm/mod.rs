@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 use area::{MapArea, Permission, MapType};
 use peripheral::peripheral_alloc;
 use crate::arch::memory::page::{
-    PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage, PAGE_SIZE
+    PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage, PAGE_SIZE
 };
 use buddy::BuddyAllocator;
 use pt::PageTable;
@@ -22,7 +22,7 @@ use crate::board::peri::memory::*;
 
 // The memory manager for a process
 pub struct MemoryManager {
-    pt: PageTable,
+    pub pt: PageTable,
     kernel_stack_area: MapArea,
     app_areas: Vec<Arc<RwLock<MapArea>>>,
     // 堆可用区域，左闭右开的集合
@@ -33,8 +33,10 @@ pub struct MemoryManager {
 }
 
 impl MemoryManager {
-    pub fn new() -> Self {
+    pub fn new(if_kernel: bool) -> Self {
         let mut pt = PageTable::new();
+        let app_areas: Vec<Arc<RwLock<MapArea>>> = Vec::with_capacity(8);
+        let _kernel_area = Vec::new();
 
         let mut kernel_stack_area = MapArea::new(
             (KERNEL_STACK_START- KERNEL_STACK_SIZE).into(), 
@@ -43,14 +45,13 @@ impl MemoryManager {
             Permission::R | Permission::W
         );
 
-        kernel_stack_area.map(&mut pt);
-
-        let app_areas: Vec<Arc<RwLock<MapArea>>> = Vec::with_capacity(8);
-        let _kernel_area = Vec::new();
+        if !if_kernel {
+            kernel_stack_area.map(&mut pt);
+        }
         
         Self {
             pt,
-            kernel_stack_area, 
+            kernel_stack_area,
             app_areas,
             buddy_alloctor: None,
             kernel_pte: PageTableEntry(0),
@@ -76,13 +77,16 @@ impl MemoryManager {
     }
 
     // return kernel stack pointer
-    pub fn push_context(&mut self, ctx: TrapContext) -> usize {
+    pub fn push_context(&mut self, ctx: TrapContext, current_pt: &mut PageTable) -> usize {
         let sp_pa = self.pt.find_pte(self.kernel_stack_area.end_vpn.prev()).unwrap().ppn().next();
 
         let trap_ctx_ptr = (PhysAddr::from(sp_pa).0 - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
+        let ppn: PhysPage = PhysAddr(trap_ctx_ptr as usize).into();
+        current_pt.map(ppn.0.into(), ppn, PTEFlags::R | PTEFlags::W);
         unsafe {
             *trap_ctx_ptr = ctx;
         }
+        current_pt.unmap(ppn.0.into());
 
         let trap_ctx_ptr_va = VirtAddr::from(self.kernel_stack_area.end_vpn).0 - core::mem::size_of::<TrapContext>();
         trap_ctx_ptr_va as usize
@@ -105,7 +109,7 @@ impl MemoryManager {
         trap_ctx_ptr as usize
     }
     
-    pub fn load_elf(&mut self, data: &[u8], runtime: bool) -> Result<(usize, usize), &'static str>{
+    pub fn load_elf(&mut self, current_pt: &mut PageTable, data: &[u8], runtime: bool) -> Result<(usize, usize), &'static str>{
         // 根据 elf 文件生成 MapArea
         let elf = elf::parse(data)?;
         let ph_count = elf.header.pt2.ph_count();
@@ -135,7 +139,7 @@ impl MemoryManager {
                         &elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize])?;
                 } else {
                     area.map_with_data(
-                        &mut self.pt, 
+                        &mut self.pt, current_pt,
                         &elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize])?;
                 }
                 offset = area.end_vpn;
@@ -166,7 +170,7 @@ impl MemoryManager {
 
     pub fn fork(&mut self, parent: &mut Self) {
         // append kernel stack
-        self.add_kernel_pt(parent.kernel_pte);
+        self.add_kernel_pt(parent);
         
         // 将父进程的所有 app area 复制一份，通过智能指针来实现自动 drop
         self.app_areas.reserve(parent.app_areas.len());
@@ -352,8 +356,8 @@ impl MemoryManager {
         Some(self.kernel_pte)
     }
 
-    pub fn add_kernel_pt(&mut self, pte: PageTableEntry) -> Option<PageTableEntry> {
-        self.kernel_pte = pte;
-        self.pt.set_pte_with_level(pte, VirtAddr(KERNEL_START_ADDR).into(), 0)
+    pub fn add_kernel_pt(&mut self, parent: &mut Self) -> Option<PageTableEntry> {
+        self.kernel_pte = parent.kernel_pte;
+        self.pt.set_pte_with_level(parent.kernel_pte, VirtAddr(KERNEL_START_ADDR).into(), 0)
     }
 }
