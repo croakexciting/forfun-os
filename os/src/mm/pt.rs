@@ -67,7 +67,7 @@ impl PageTable {
         for (k, v) in idx.iter().enumerate() {
             // TODO: 需要考虑下如何在虚地址模式下访问页表
             let pte = ppn.pte_array()[*v].borrow_mut();
-            if k == 2 {
+            if k == (idx.len() - 1) {
                 // 从叶子页表中获得了 PTE，直接返回
                 return Some(pte)
             } else {
