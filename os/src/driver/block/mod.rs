@@ -1,4 +1,8 @@
 use alloc::string::String;
+use alloc::{sync::Arc, vec};
+use spin::mutex::Mutex;
+use rcore_fs;
+
 pub mod qemu_blk;
 
 pub trait BlockDevice: Send + Sync {
@@ -61,5 +65,91 @@ impl Iterator for BlockIter {
             end, 
             block_size_log2: self.block_size_log2 
         })
+    }
+}
+
+pub struct BlkDeviceForFs {
+    device: Arc<Mutex<dyn BlockDevice>>,
+}
+
+impl BlkDeviceForFs {
+    pub fn new(device: Arc<Mutex<dyn BlockDevice>>) -> Self {
+        Self { device }
+    }
+}
+
+impl rcore_fs::dev::Device for BlkDeviceForFs {
+    fn read_at(&self, seek: usize, buf: &mut [u8]) -> rcore_fs::dev::Result<usize> {
+        let block_iter = BlockIter {
+            start: seek,
+            end: seek + buf.len(),
+            block_size_log2: self.device.lock().block_size_log2()
+        };
+
+        let mut offset: usize = 0;
+
+        for sub in block_iter {
+            let blk_size = 1usize << sub.block_size_log2;
+            if sub.is_full() {
+                let slice = &mut buf[offset..(offset + blk_size)];
+                if let Err(e) = self.device.lock().read_block(sub.id, slice) {
+                    println!("[kernel] read block failed: {}", e.as_str());
+                    return Err(rcore_fs::dev::DevError)
+                }
+                offset += blk_size;
+            } else {
+                // if the size less than block size, need copy
+                let mut temp: vec::Vec<u8> = vec![0; blk_size];
+                let dst = &mut buf[offset..(offset + sub.len())];
+                if let Err(e) = self.device.lock().read_block(sub.id, temp.as_mut_slice()) {
+                    println!("[kernel] read block failed: {}", e.as_str());
+                    return Err(rcore_fs::dev::DevError)
+                }
+                let src = &temp.as_slice()[sub.start..sub.end];
+                dst.copy_from_slice(src);
+                offset += sub.len()
+            }
+        }
+
+        Ok(offset)
+    }
+
+    fn write_at(&self, seek: usize, buf: &[u8]) -> rcore_fs::dev::Result<usize> {
+        let block_iter = BlockIter {
+            start: seek,
+            end: seek + buf.len(),
+            block_size_log2: self.device.lock().block_size_log2()
+        };
+
+        let mut offset: usize = 0;
+
+        for sub in block_iter {
+            let blk_size = 1usize << sub.block_size_log2;
+            if sub.is_full() {
+                let slice = &buf[offset..(offset + sub.len())];
+                if let Err(e) = self.device.lock().write_block(sub.id, slice) {
+                    println!("[kernel] write block failed: {}", e.as_str());
+                    return Err(rcore_fs::dev::DevError)
+                }
+                offset += sub.len();
+            } else {
+                let mut temp: vec::Vec<u8> = vec![0; blk_size];
+                let src = &buf[offset..(offset + sub.len())];
+                let dst = &mut temp.as_mut_slice()[sub.start..sub.end];
+                dst.copy_from_slice(src);
+                if let Err(e) = self.device.lock().write_block(sub.id, temp.as_mut_slice()) {
+                    println!("[kernel] write block failed: {}", e.as_str());
+                    return Err(rcore_fs::dev::DevError)
+                }
+                offset += sub.len();
+            }
+        }
+
+        Ok(offset)
+    }
+
+    fn sync(&self) -> rcore_fs::dev::Result<()> {
+        // since the device inside a mutex lock, just return Ok
+        Ok(())
     }
 }

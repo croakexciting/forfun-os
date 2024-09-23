@@ -20,6 +20,10 @@ pub fn sys_lseek(fd: usize, seek: usize) -> isize {
     lseek(fd, seek)
 }
 
+pub fn sys_size(fd: usize) -> isize {
+    filesize(fd) as isize
+}
+
 pub fn sys_create_pipe(buf: *mut usize) -> isize {
     unsafe {
         let arr = core::slice::from_raw_parts_mut(buf, 2);

@@ -9,6 +9,7 @@ const SYSCALL_WRITE: usize = 1;
 const SYSCALL_OPEN: usize = 2;
 const SYSCALL_CLOSE: usize = 3;
 const SYSCALL_LSEEK: usize = 4;
+const SYSCALL_SIZE: usize = 5;
 const SYSCALL_MMAP: usize = 9;
 const SYSCALL_UMMAP: usize = 10;
 const SYSCALL_MMAP_WITH_ADDR: usize = 11;
@@ -78,6 +79,10 @@ pub fn sys_open(name: &str) -> isize {
 
 pub fn sys_lseek(fd: usize, seek: usize) -> isize {
     syscall(SYSCALL_LSEEK, [fd, seek, 0, 0])
+}
+
+pub fn sys_filesize(fd: usize) -> isize {
+    syscall(SYSCALL_SIZE, [fd, 0, 0, 0])
 }
 
 pub fn sys_exit(exit_code: i32) -> isize {

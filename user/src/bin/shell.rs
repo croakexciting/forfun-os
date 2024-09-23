@@ -7,35 +7,15 @@ extern crate ffos_app;
 extern crate alloc;
 
 use alloc::string::String;
-use ffos_app::{console::getchar, signal::SignalFlags, syscall::{sys_connect_server, sys_exec, sys_fork, sys_mmap, sys_request_server, sys_sigprocmask, sys_ummap, sys_wait, sys_yield}};
+use ffos_app::{
+    console::getchar, signal::SignalFlags, 
+    syscall::*
+};
 
 const LF: u8 = 0x0au8;
 const CR: u8 = 0x0du8;
 const DL: u8 = 0x7fu8;
 const BS: u8 = 0x08u8;
-
-const GET_FILELEN_SERVER: &'static str = "get_filelen\0";
-const READ_FILE_SERVER: &'static str = "read_file\0"; 
-
-fn get_len(name: &str) -> isize {
-    let coid = sys_connect_server(&GET_FILELEN_SERVER);
-    if coid >= 0 {
-        let mut ret_buf: [u8; 8] = [0; 8];
-        sys_request_server(coid as usize, name.as_bytes(), ret_buf.as_mut_ptr());
-        return isize::from_ne_bytes(ret_buf);
-    } else{
-        return coid;
-    }
-}
-
-fn get_elf(name: &str, elf: &mut [u8]) -> isize {
-    let coid = sys_connect_server(&READ_FILE_SERVER);
-    if coid >= 0 {
-        return sys_request_server(coid as usize, name.as_bytes(), elf.as_mut_ptr());
-    } else {
-        return coid;
-    }
-}
 
 #[no_mangle]
 pub fn main() -> i32 {
@@ -50,18 +30,18 @@ pub fn main() -> i32 {
                 println!("");
                 if !line.is_empty() {
                     // get line len
-                    let file_size = get_len(&line.as_str());
-                    if file_size <= 0 {
+                    let fd = sys_open(&line.as_str());
+                    if fd < 0 {
                         line.clear();
                         println!("file not found");
                         print!(">> ");
                         continue;
                     }
-
+                    let file_size = sys_filesize(fd as usize);
                     let block_size = (file_size as usize / 4096) + 1;
                     let buf_ptr = sys_mmap(4096 * block_size, 0x3) as usize as *mut u8;
-                    let buf = unsafe { core::slice::from_raw_parts_mut(buf_ptr, 4096 * 256)};
-                    let r = get_elf(&line.as_str(), buf);
+                    let buf = unsafe { core::slice::from_raw_parts_mut(buf_ptr, file_size as usize)};
+                    let r = sys_read(fd as usize, buf);
                     if r >= 0 {
                         let pid = sys_fork();
                         if pid == 0 {

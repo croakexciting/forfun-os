@@ -107,7 +107,8 @@ pub struct AsidAllocator {
 
 impl AsidAllocator {
     pub fn new() -> Self {
-        Self { current: 0, end: 0xFFFF, recycled: Vec::new() }
+        // asid 0 reserved for kernel
+        Self { current: 1, end: 0xFFFF, recycled: Vec::new() }
     }
 
     // 按照顺序

@@ -119,7 +119,7 @@ impl MapArea {
         0
     }
 
-    pub fn map_with_data(&mut self, pt: &mut PageTable, data: &[u8]) -> Result<(), &'static str>{
+    pub fn map_with_data(&mut self, pt: &mut PageTable, current_pt: &mut PageTable, data: &[u8]) -> Result<(), &'static str>{
         if data.len() > (self.end_vpn.0 - self.start_vpn.0) * PAGE_SIZE {
             return Err("data length overflow");
         }
@@ -134,7 +134,9 @@ impl MapArea {
                 if offset < data.len() {
                     let src = &data[offset..data.len().min(offset + PAGE_SIZE)];
                     let dst = &mut p.ppn().bytes_array()[..src.len()];
+                    current_pt.kmap(p.ppn().into());
                     dst.copy_from_slice(src);
+                    current_pt.kunmap(p.ppn().into());
                     offset += PAGE_SIZE;
                 }
             } else {

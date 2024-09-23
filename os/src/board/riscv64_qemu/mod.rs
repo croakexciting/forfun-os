@@ -4,13 +4,12 @@ pub mod serial;
 pub mod memory;
 
 use crate::{
-    driver::{self, serial::qemu_serial::Uart}, 
-    process, utils::type_extern::RefCellWrap
+    driver::{self, block::{qemu_blk::QemuBlk, BlkDeviceForFs}, serial::qemu_serial::Uart}, file::fs::FILESYSTEM, process, utils::type_extern::RefCellWrap
 };
 use alloc::sync::Arc;
 use lazy_static::*;
 use plic::PLIC_ADDR;
-use spin::rwlock::RwLock;
+use spin::mutex::Mutex;
 
 // 在这里创建一些驱动的单例
 
@@ -20,11 +19,7 @@ lazy_static! {
     };
 
     pub static ref PLIC: RefCellWrap<driver::plic::qemu_plic::PLIC> = unsafe {
-        RefCellWrap::new(plic::plic_init())
-    };
-
-    pub static ref BLK0_VA: Arc<RwLock<usize>> = {
-        Arc::new(RwLock::new(0))
+        RefCellWrap::new(driver::plic::qemu_plic::PLIC::new(0))
     };
 }
 
@@ -36,7 +31,9 @@ pub fn enable_virtual_mode() {
     CONSOLE.exclusive_access().set_addr(uart_va as usize);
 
     let blk_va = process::map_peripheral(BLK_HEADER_ADDR, 0x8000);
-    *BLK0_VA.write() = blk_va as usize;
+    // create fs in here
+    let blk_device = BlkDeviceForFs::new(Arc::new(Mutex::new(QemuBlk::new(blk_va as usize))));
+    FILESYSTEM.exclusive_access().set_sfs(blk_device);
 
     let plic_va = process::map_peripheral(PLIC_ADDR, 0x40_0000);
     PLIC.exclusive_access().set_addr(plic_va as usize)
