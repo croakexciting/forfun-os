@@ -2,8 +2,8 @@ use crate::{driver::plic::qemu_plic::*, println};
 
 pub const PLIC_ADDR: usize = 0xC00_0000;
 
-pub fn plic_init() -> PLIC {
-    let plic = PLIC::new(PLIC_ADDR);
+pub fn plic_init() {
+    let plic = super::PLIC.exclusive_access();
     plic.set_threshold(0, Level::Supervisor, 0);
     plic.set_threshold(0, Level::Machine, 1);
     plic.enable(0, Level::Supervisor, 10);
@@ -12,8 +12,6 @@ pub fn plic_init() -> PLIC {
     unsafe {
         riscv::register::sie::set_sext();
     }
-
-    plic
 }
 
 pub fn external_irq_handler() {

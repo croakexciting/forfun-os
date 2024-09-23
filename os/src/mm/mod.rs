@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 use area::{MapArea, Permission, MapType};
 use peripheral::peripheral_alloc;
 use crate::arch::memory::page::{
-    PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage, PAGE_SIZE
+    PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage, PAGE_SIZE
 };
 use buddy::BuddyAllocator;
 use pt::PageTable;
@@ -81,12 +81,11 @@ impl MemoryManager {
         let sp_pa = self.pt.find_pte(self.kernel_stack_area.end_vpn.prev()).unwrap().ppn().next();
 
         let trap_ctx_ptr = (PhysAddr::from(sp_pa).0 - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
-        let ppn: PhysPage = PhysAddr(trap_ctx_ptr as usize).into();
-        current_pt.map(ppn.0.into(), ppn, PTEFlags::R | PTEFlags::W);
+        current_pt.kmap(PhysAddr(trap_ctx_ptr as usize));
         unsafe {
             *trap_ctx_ptr = ctx;
         }
-        current_pt.unmap(ppn.0.into());
+        current_pt.kunmap(PhysAddr(trap_ctx_ptr as usize));
 
         let trap_ctx_ptr_va = VirtAddr::from(self.kernel_stack_area.end_vpn).0 - core::mem::size_of::<TrapContext>();
         trap_ctx_ptr_va as usize

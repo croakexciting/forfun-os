@@ -19,7 +19,7 @@ lazy_static! {
     };
 
     pub static ref PLIC: RefCellWrap<driver::plic::qemu_plic::PLIC> = unsafe {
-        RefCellWrap::new(plic::plic_init())
+        RefCellWrap::new(driver::plic::qemu_plic::PLIC::new(0))
     };
 }
 
@@ -35,8 +35,8 @@ pub fn enable_virtual_mode() {
     let blk_device = BlkDeviceForFs::new(Arc::new(Mutex::new(QemuBlk::new(blk_va as usize))));
     FILESYSTEM.exclusive_access().set_sfs(blk_device);
 
-    // let plic_va = process::map_peripheral(PLIC_ADDR, 0x40_0000);
-    // PLIC.exclusive_access().set_addr(plic_va as usize)
+    let plic_va = process::map_peripheral(PLIC_ADDR, 0x40_0000);
+    PLIC.exclusive_access().set_addr(plic_va as usize)
 }
 
 pub fn board_init() {

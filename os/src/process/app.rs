@@ -405,12 +405,16 @@ impl AppManagerInner {
 
     // pub fn app(&self)
     fn task(&mut self, id: usize) -> Result<Arc<Mutex<Process>>, &'static str> {
-        if let Some(task) = self.tasks[id].upgrade() {
-            Ok(task)
-        } else {
-            self.tasks.remove(id);
-            Err("task instance not exists now.")
+        if self.tasks.len() > 0 {
+            if let Some(task) = self.tasks[id].upgrade() {
+                return Ok(task);
+            } else {
+                self.tasks.remove(id);
+                return Err("task instance not exists now.")
+            }
         }
+
+        return Err("tasks not created now.")
     }
 
 
@@ -440,7 +444,7 @@ impl AppManagerInner {
             return -1;
         }
         // read elf from fs
-        let fd = initproc.open("hello_world");
+        let fd = initproc.open("shell");
         if fd < 0 {
             println!("[kernel] open file failed");
             return -2;

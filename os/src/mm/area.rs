@@ -10,7 +10,6 @@ use crate::arch::memory::copy::{
     copy_from_user_into_vector, copy_user_page_to_vector, copy_vector_to_user_page, disable_user_access, enable_user_access
 };
 
-use super::MemoryManager;
 use super::{
     allocator::{frame_alloc, PhysFrame}, 
     pt::PageTable
@@ -135,9 +134,9 @@ impl MapArea {
                 if offset < data.len() {
                     let src = &data[offset..data.len().min(offset + PAGE_SIZE)];
                     let dst = &mut p.ppn().bytes_array()[..src.len()];
-                    current_pt.map(p.ppn().0.into(), p.ppn(), PTEFlags::R | PTEFlags::W);
+                    current_pt.kmap(p.ppn().into());
                     dst.copy_from_slice(src);
-                    current_pt.unmap(p.ppn().0.into());
+                    current_pt.kunmap(p.ppn().into());
                     offset += PAGE_SIZE;
                 }
             } else {
