@@ -44,8 +44,9 @@ pub fn main() -> i32 {
                     let r = sys_read(fd as usize, buf);
                     if r >= 0 {
                         let pid = sys_fork();
+                        println!("pid is {}", pid);
                         if pid == 0 {
-                            sys_exec(&buf[0..r as usize]);
+                            sys_exec(&buf[0..file_size as usize]);
                         } else {
                             loop {
                                 // TODO: 在 shell 里执行 read 卡住时，会影响其他进程执行，需要 debug

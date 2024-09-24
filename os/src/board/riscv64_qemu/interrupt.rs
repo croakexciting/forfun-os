@@ -1,4 +1,4 @@
-use crate::{driver::plic::qemu_plic::*, println};
+use crate::{driver::ic::plic::*, println};
 
 pub const PLIC_ADDR: usize = 0xC00_0000;
 

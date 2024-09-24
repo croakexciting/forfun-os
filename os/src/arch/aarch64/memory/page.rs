@@ -98,9 +98,9 @@ pub fn flags(pte: usize) -> Option<PTEFlags> {
         flags.insert(PTEFlags::V)
     }
 
-    if pte & (1usize << 1) > 0 {
-        flags.insert(PTEFlags::T);
-    }
+    // if pte & (1usize << 1) > 0 {
+    //     flags.insert(PTEFlags::T);
+    // }
 
     let ap = (pte & (3usize << 6)) >> 6;
     if ap == 0 {

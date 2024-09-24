@@ -1,5 +1,5 @@
 pub mod timer;
-pub mod plic;
+pub mod interrupt;
 pub mod serial;
 pub mod memory;
 
@@ -8,7 +8,7 @@ use crate::{
 };
 use alloc::sync::Arc;
 use lazy_static::*;
-use plic::PLIC_ADDR;
+use interrupt::PLIC_ADDR;
 use spin::mutex::Mutex;
 
 // 在这里创建一些驱动的单例
@@ -18,8 +18,8 @@ lazy_static! {
         RefCellWrap::new(serial::init())
     };
 
-    pub static ref PLIC: RefCellWrap<driver::plic::qemu_plic::PLIC> = unsafe {
-        RefCellWrap::new(driver::plic::qemu_plic::PLIC::new(0))
+    pub static ref PLIC: RefCellWrap<driver::ic::plic::PLIC> = unsafe {
+        RefCellWrap::new(driver::ic::plic::PLIC::new(0))
     };
 }
 
@@ -40,7 +40,7 @@ pub fn enable_virtual_mode() {
 }
 
 pub fn board_init() {
-    plic::plic_init();
+    interrupt::plic_init();
 }
 
 pub fn shutdown(failure: bool) -> ! {

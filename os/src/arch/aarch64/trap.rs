@@ -1,5 +1,5 @@
 use aarch64_cpu::{asm::barrier, registers::*};
-use crate::{arch::context::TrapContext, println, syscall::syscall};
+use crate::{arch::context::TrapContext, process::{back_to_idle, cow}, syscall::syscall};
 use core::arch::{asm, global_asm};
 
 global_asm!(include_str!("trap.S"));
@@ -15,18 +15,38 @@ pub fn init() {
 }
 
 #[no_mangle]
-pub fn current_elx_synchronous(_ctx: &mut TrapContext) {
-    panic!("current elx sync");
+pub fn current_elx_synchronous(ctx: &mut TrapContext) -> &mut TrapContext {
+    let mut esr: usize;
+    unsafe { asm!("mrs {0}, ESR_EL1", out(reg) esr); }
+    let ec: usize = (esr >> 26) & 0x3F;
+    match ec {
+        0x24 => {
+            // access failed
+            let addr = FAR_EL1.get() as usize;
+            match cow(addr) {
+                Ok(_) => {
+                    back_to_idle();
+                }
+                Err(e) => {
+                    panic!("[kernel] copy on write failed: {}, kernel killed it.", e);
+                }
+            }
+        }
+        _ => {
+            panic!("current elx sync unsupported ec value: {}", ec);
+        }
+    }
+    ctx
 }
 
 #[no_mangle]
 pub fn current_elx_irq(_ctx: &mut TrapContext) {
-    println!("current elx irq");
+    panic!("current elx irq");
 }
 
 #[no_mangle]
 pub fn current_elx_serror(_ctx: &mut TrapContext) {
-    println!("current elx serror");
+    panic!("current elx serror");
 }
 
 #[no_mangle]
@@ -38,8 +58,20 @@ pub fn lower_aarch64_synchronous(ctx: &mut TrapContext) -> &mut TrapContext {
         0x15 => {
             ctx.x[0] = syscall(ctx.x[8], [ctx.x[0], ctx.x[1], ctx.x[2], ctx.x[3]]) as usize
         }
+        0x24 => {
+            // access failed
+            let addr = FAR_EL1.get() as usize;
+            match cow(addr) {
+                Ok(_) => {
+                    back_to_idle();
+                }
+                Err(e) => {
+                    panic!("[kernel] copy on write failed: {}, kernel killed it.", e);
+                }
+            }
+        }
         _ => {
-            println!("unsupported ec value: {}", ec);
+            panic!("unsupported ec value: {}", ec);
         }
     }
     ctx
@@ -47,10 +79,10 @@ pub fn lower_aarch64_synchronous(ctx: &mut TrapContext) -> &mut TrapContext {
 
 #[no_mangle]
 pub fn lower_aarch64_irq(_ctx: &mut TrapContext) {
-    println!("lower aarch64 irq");
+    panic!("lower aarch64 irq");
 }
 
 #[no_mangle]
 pub fn lower_aarch64_serror(_ctx: &mut TrapContext) {
-    println!("lower aarch64 serror");
+    panic!("lower aarch64 serror");
 }

@@ -18,7 +18,7 @@ pub fn console_getchar() -> u8 {
 
 #[allow(unused)]
 pub fn external_irq_handler() {
-    peri::plic::external_irq_handler()
+    peri::interrupt::external_irq_handler()
 }
 
 pub fn board_init() {

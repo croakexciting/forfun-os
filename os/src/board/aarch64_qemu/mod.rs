@@ -1,6 +1,6 @@
 pub mod serial;
 pub mod memory;
-pub mod plic;
+pub mod interrupt;
 pub mod timer;
 
 use alloc::sync::Arc;

@@ -1,5 +1,6 @@
 ARCH ?= riscv64
 BOARD ?= riscv64_qemu
+IMG ?= sfs-riscv64.img
 
 ifeq ($(BOARD), riscv64_qemu)
 	ARCH = riscv64
@@ -11,10 +12,12 @@ ifeq ($(ARCH), riscv64)
 	TARGET = riscv64gc-unknown-none-elf
 	KERNEL_ENTRY = 0x80200000
 	APP_ENTRY = 0x81000000
+	IMG = sfs-riscv64.img
 else ifeq ($(ARCH), aarch64)
 	TARGET = aarch64-unknown-none
 	KERNEL_ENTRY = 0x40000000
 	APP_ENTRY = 0x41000000
+	IMG = sfs-aarch64.img
 endif
 
 MODE ?= release
@@ -35,7 +38,7 @@ ifeq ($(ARCH), riscv64)
 			 -nographic \
 			 -bios ../bootloader/rustsbi-qemu.bin \
 			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY) \
-			 -drive file=../sfs.img,if=none,format=raw,id=x0 \
+			 -drive file=../${IMG},if=none,format=raw,id=x0 \
 			 -device virtio-blk-device,drive=x0
 else ifeq ($(ARCH), aarch64)
 	QEMU_ARGS = -machine virt \
@@ -44,7 +47,7 @@ else ifeq ($(ARCH), aarch64)
 			 -nographic \
 			 -serial mon:stdio \
 			 -kernel $(KERNEL_ELF) \
-			 -drive file=../sfs.img,if=none,format=raw,id=x0 \
+			 -drive file=../${IMG},if=none,format=raw,id=x0 \
 			 -device virtio-blk-device,drive=x0
 endif
 
