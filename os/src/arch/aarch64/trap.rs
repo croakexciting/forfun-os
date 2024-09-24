@@ -16,7 +16,7 @@ pub fn init() {
 
 #[no_mangle]
 pub fn current_elx_synchronous(_ctx: &mut TrapContext) {
-    println!("current elx sync");
+    panic!("current elx sync");
 }
 
 #[no_mangle]

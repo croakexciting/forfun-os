@@ -3,3 +3,5 @@ target
 empty.img
 sfs.img
 appbins
+*dtb
+*dts

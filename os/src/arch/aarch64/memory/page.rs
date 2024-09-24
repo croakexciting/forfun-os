@@ -16,7 +16,7 @@ pub const PPN_VALID_WIDTH: usize = 32;
 pub const VPN_VALID_WIDTH: usize = 27;
 
 pub fn root_ppn() -> usize {
-    aarch64_cpu::registers::TTBR0_EL1.get_baddr() as usize
+    (aarch64_cpu::registers::TTBR0_EL1.get_baddr() as usize) >> 12
 }
 
 pub fn enable_va(id: usize, ppn: usize) {

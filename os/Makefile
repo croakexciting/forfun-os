@@ -35,7 +35,6 @@ ifeq ($(ARCH), riscv64)
 			 -nographic \
 			 -bios ../bootloader/rustsbi-qemu.bin \
 			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY) \
-			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY),force-raw=on \
 			 -drive file=../sfs.img,if=none,format=raw,id=x0 \
 			 -device virtio-blk-device,drive=x0
 else ifeq ($(ARCH), aarch64)
@@ -45,7 +44,8 @@ else ifeq ($(ARCH), aarch64)
 			 -nographic \
 			 -serial mon:stdio \
 			 -kernel $(KERNEL_ELF) \
-			 -device loader,file=$(APP_BIN),addr=$(APP_ENTRY),force-raw=on
+			 -drive file=../sfs.img,if=none,format=raw,id=x0 \
+			 -device virtio-blk-device,drive=x0
 endif
 
 build:

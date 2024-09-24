@@ -4,8 +4,10 @@ ARCH ?= riscv64
 BOARD ?= riscv64_qemu
 
 ifeq ($(BOARD), riscv64_qemu)
+	TARGET = riscv64gc-unknown-none-elf
 	ARCH = riscv64
 else ifeq ($(BOARD), aarch64_qemu)
+	TARGET = aarch64-unknown-none
 	ARCH = aarch64
 endif
 

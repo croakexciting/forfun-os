@@ -304,6 +304,9 @@ impl MemoryManager {
 
         let mut ppns: Vec<PhysPage> = Vec::with_capacity(pn);
         let mut start_ppn: PhysPage = pa.into();
+
+        let offset = pa.0 % PAGE_SIZE;
+
         for _ in 0..pn {
             ppns.push(start_ppn);
             start_ppn = start_ppn.next();
@@ -318,7 +321,7 @@ impl MemoryManager {
             );
             new_area.map_defined(&mut self.pt, &ppns);
             self._kernel_area.push(new_area);
-            vpa_start as isize
+            (vpa_start + offset) as isize
         } else {
             -1
         }
