@@ -1,3 +1,5 @@
+use core::arch::asm;
+
 use aarch64_cpu::{asm::barrier, registers::*};
 use tock_registers::interfaces::ReadWriteable;
 
@@ -19,11 +21,18 @@ pub fn root_ppn() -> usize {
     (aarch64_cpu::registers::TTBR0_EL1.get_baddr() as usize) >> 12
 }
 
+pub unsafe fn flush_tlb(asid: usize) {
+    asm!("dsb ishst");
+    asm!("tlbi aside1, {}", in(reg) asid);
+    asm!("dsb ish");
+    asm!("isb");
+}
+
 pub fn enable_va(id: usize, ppn: usize) {
     MAIR_EL1.write(
         MAIR_EL1::Attr1_Normal_Outer::WriteBack_NonTransient_ReadWriteAlloc
         + MAIR_EL1::Attr1_Normal_Inner::WriteBack_NonTransient_ReadWriteAlloc
-        // + MAIR_EL1::Attr0_Device::nonGathering_nonReordering_EarlyWriteAck
+        + MAIR_EL1::Attr0_Device::nonGathering_nonReordering_EarlyWriteAck
     );
 
     TTBR0_EL1.write(TTBR0_EL1::ASID.val(id as u64) + TTBR0_EL1::BADDR.val((ppn << 11) as u64));
@@ -40,6 +49,8 @@ pub fn enable_va(id: usize, ppn: usize) {
         + TCR_EL1::A1::TTBR0
         + TCR_EL1::EPD1::DisableTTBR1Walks
     );
+
+    unsafe {flush_tlb(id);}
     
     barrier::isb(barrier::SY);
     SCTLR_EL1.modify(SCTLR_EL1::M::Enable + SCTLR_EL1::C::Cacheable + SCTLR_EL1::I::Cacheable);
@@ -106,11 +117,11 @@ pub fn flags(pte: usize) -> Option<PTEFlags> {
     if ap == 0 {
         flags.insert(PTEFlags::R | PTEFlags::W)
     } else if ap == 1 {
-        flags.insert(PTEFlags::R | PTEFlags::U)
-    } else if ap == 2 {
         flags.insert(PTEFlags::R | PTEFlags::W | PTEFlags::U)
-    } else if ap == 3 {
+    } else if ap == 2 {
         flags.insert(PTEFlags::R)
+    } else if ap == 3 {
+        flags.insert(PTEFlags::R | PTEFlags::U)
     }
 
     let x = (pte & 3usize << 53) >> 53;
