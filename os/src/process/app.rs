@@ -16,7 +16,7 @@ use crate::ipc::semaphore::Semaphore;
 use crate::ipc::shm::Shm;
 use crate::mm::allocator::{asid_alloc, AisdHandler};
 use crate::mm::area::UserBuffer;
-use crate::arch::memory::page::{enable_va, PhysAddr, VirtAddr, VirtPage, PAGE_SIZE};
+use crate::arch::memory::page::{enable_va, flush_tlb, PhysAddr, VirtAddr, VirtPage, PAGE_SIZE};
 use crate::mm::pt::PageTable;
 use crate::mm::MemoryManager;
 use crate::arch::context::__switch;
@@ -867,6 +867,9 @@ impl Process {
         let kernel_sp = self.mm.runtime_push_context(trap_ctx);
         self.ctx = SwitchContext::new_with_restore_addr(kernel_sp);
         self.set_status(ProcessStatus::READY);
+
+        // flush tlb
+        flush_tlb(self.asid.0 as usize);
         Ok(())
     }
 

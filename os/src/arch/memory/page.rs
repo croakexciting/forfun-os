@@ -242,3 +242,9 @@ pub fn root_ppn() -> usize {
 pub fn enable_va(id: usize, ppn: usize) {
     crate::arch::inner::memory::page::enable_va(id, ppn)
 }
+
+pub fn flush_tlb(asid: usize) {
+    unsafe {
+        crate::arch::inner::memory::page::flush_tlb(asid);
+    }
+}

@@ -1,4 +1,6 @@
 use core::arch::asm;
+use aarch64_cpu::{asm::barrier, registers::*};
+use tock_registers::interfaces::ReadWriteable;
 
 pub const CLOCK_FREQ: usize = 62500000;
 
@@ -25,10 +27,6 @@ pub fn set_trigger(tick_per_sec: usize) {
 
     let new_tick = (cntpct_el0 + CLOCK_FREQ / tick_per_sec) as u64;
 
-    unsafe {
-        asm!(
-            "msr CNTP_CVAL_EL0, {}",
-            in(reg) new_tick
-        )
-    }
+    CNTP_CVAL_EL0.set(new_tick);
+    CNTP_CTL_EL0.modify(CNTP_CTL_EL0::ENABLE::SET + CNTP_CTL_EL0::IMASK::CLEAR);
 }
