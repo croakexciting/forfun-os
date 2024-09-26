@@ -7,11 +7,15 @@ use alloc::sync::Arc;
 use lazy_static::*;
 use spin::mutex::Mutex;
 
-use crate::{driver::{block::{qemu_blk::QemuBlk, BlkDeviceForFs}, ic::gicv2::GICV2}, file::fs::FILESYSTEM, process, utils::type_extern::RefCellWrap};
+use crate::{driver::{self, block::{qemu_blk::QemuBlk, BlkDeviceForFs}}, file::fs::FILESYSTEM, process, utils::type_extern::RefCellWrap};
 
 lazy_static! {
     pub static ref CONSOLE: RefCellWrap<arm_pl011::Pl011Uart> = unsafe {
         RefCellWrap::new(serial::init(serial::UART0_ADDR))
+    };
+
+    pub static ref GIC: RefCellWrap<driver::ic::gicv2::GICV2> = unsafe {
+        RefCellWrap::new(driver::ic::gicv2::GICV2::new(0))
     };
 }
 
@@ -43,11 +47,11 @@ pub fn enable_virtual_mode() {
     FILESYSTEM.exclusive_access().set_sfs(blk_device);
 
     let gic_va = process::map_peripheral(0x800_0000, 0x2_0000);
-    let gic = GICV2::new(gic_va as usize + 0x10000, gic_va as usize);
-    gic.enable(30);
-    gic.enable(29);
-    gic.set_priority(255);
+    GIC.exclusive_access().set_addr(gic_va as usize);
 }
 
-pub fn board_init() {}
+pub fn board_init() {
+    GIC.exclusive_access().enable(30);
+    GIC.exclusive_access().set_priority(255);
+}
 

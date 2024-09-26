@@ -1,6 +1,6 @@
 #![allow(unused)]
 use tock_registers::{
-    interfaces::{Readable, Writeable},
+    interfaces::{ReadWriteable, Readable, Writeable},
     register_bitfields, register_structs,
     registers::{ReadOnly, ReadWrite},
 };
@@ -44,8 +44,9 @@ register_bitfields! {
 
 register_structs! {
     #[allow(non_snake_case)]
-    pub GICDPPIBlock {
-        (0x000 => _reserved1),
+    pub GICDBlock {
+        (0x000 => CTLR: ReadWrite<u32, CTLR::Register>),
+        (0x004 => _reserved1),
         (0x100 => ISENABLER: ReadWrite<u32>),
         (0x104 => _reserved2),
         (0x800 => ITARGETSR: [ReadOnly<u32, ITARGETSR::Register>; 8]),
@@ -72,14 +73,19 @@ impl GICD {
         Self { addr }
     }
 
+    pub fn set_addr(&mut self, addr: usize) {
+        self.addr = addr
+    }
+
     pub fn enable(&self, irq_num: usize) {
         let enable_reg_index = irq_num >> 5;
         let enable_bit = 1u32 << (irq_num % 32);
         match irq_num {
             // PPI
             0..=31 => {
-                let ppi = unsafe { &*(self.addr as *const GICDPPIBlock) };
-                ppi.ISENABLER.set(ppi.ISENABLER.get() | enable_bit);
+                let gicd = unsafe { &*(self.addr as *const GICDBlock) };
+                gicd.CTLR.write(CTLR::Enable::SET);
+                gicd.ISENABLER.set(gicd.ISENABLER.get() | enable_bit);
             }
             // SPI
             _ => {
@@ -96,6 +102,10 @@ pub struct GICC {
 impl GICC {
     pub fn new(addr: usize) -> Self {
         Self { addr }
+    }
+
+    pub fn set_addr(&mut self, addr: usize) {
+        self.addr = addr
     }
 
     pub fn enable(&self) {
@@ -125,8 +135,13 @@ pub struct GICV2 {
 }
 
 impl GICV2 {
-    pub fn new(gicc_addr: usize, gicd_addr: usize) -> GICV2 {
-        Self { gicd: GICD::new(gicd_addr), gicc: GICC::new(gicc_addr) }
+    pub fn new(addr: usize) -> GICV2 {
+        Self { gicd: GICD::new(addr), gicc: GICC::new(addr + 0x10000) }
+    }
+
+    pub fn set_addr(&mut self, addr: usize) {
+        self.gicc.set_addr(addr + 0x10000);
+        self.gicd.set_addr(addr);
     }
 
     pub fn enable(&self, irq_num: usize) {
@@ -136,5 +151,13 @@ impl GICV2 {
 
     pub fn set_priority(&self, priority: u32) {
         self.gicc.set_priority(priority);
+    }
+
+    pub fn claim(&self) -> usize {
+        self.gicc.claim()
+    }
+
+    pub fn complete(&self, irq_num: usize) {
+        self.gicc.complete(irq_num as u32);
     }
 }

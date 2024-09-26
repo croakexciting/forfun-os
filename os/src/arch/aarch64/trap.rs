@@ -1,6 +1,6 @@
 use aarch64_cpu::{asm::barrier, registers::*};
 use tock_registers::interfaces::ReadWriteable;
-use crate::{arch::context::TrapContext, process::{back_to_idle, cow}, syscall::syscall};
+use crate::{arch::context::TrapContext, board::{peri::GIC, timer::set_trigger}, process::{back_to_idle, cow}, syscall::syscall};
 use core::arch::{asm, global_asm};
 
 global_asm!(include_str!("trap.S"));
@@ -79,8 +79,18 @@ pub fn lower_aarch64_synchronous(ctx: &mut TrapContext) -> &mut TrapContext {
 }
 
 #[no_mangle]
-pub fn lower_aarch64_irq(_ctx: &mut TrapContext) {
-    panic!("lower aarch64 irq");
+pub fn lower_aarch64_irq(ctx: &mut TrapContext) -> &mut TrapContext {
+    let irq_num = GIC.exclusive_access().claim();
+    match irq_num {
+        30 => {
+            set_trigger();
+            GIC.exclusive_access().complete(irq_num);
+            back_to_idle();
+        },
+        1020.. => {},
+        _ => {panic!("irq {} not supported now", irq_num);},
+    }
+    return ctx;
 }
 
 #[no_mangle]
