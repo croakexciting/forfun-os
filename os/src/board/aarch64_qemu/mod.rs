@@ -51,6 +51,9 @@ pub fn enable_virtual_mode() {
 }
 
 pub fn board_init() {
+    CONSOLE.exclusive_access().init();
+    CONSOLE.exclusive_access().ack_interrupts();
+    CONSOLE.exclusive_access().is_receive_interrupt();
     GIC.exclusive_access().enable(30);
     GIC.exclusive_access().set_priority(255);
 }

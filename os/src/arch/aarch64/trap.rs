@@ -1,6 +1,11 @@
 use aarch64_cpu::{asm::barrier, registers::*};
 use tock_registers::interfaces::ReadWriteable;
-use crate::{arch::context::TrapContext, board::{peri::GIC, timer::set_trigger}, process::{back_to_idle, cow}, syscall::syscall};
+use crate::{
+    arch::context::TrapContext, 
+    board::{peri::GIC, timer::set_trigger}, 
+    process::{app::SignalCode, back_to_idle, cow, exit, save_trap_ctx, signal_handler}, 
+    syscall::syscall
+};
 use core::arch::{asm, global_asm};
 
 global_asm!(include_str!("trap.S"));
@@ -75,6 +80,7 @@ pub fn lower_aarch64_synchronous(ctx: &mut TrapContext) -> &mut TrapContext {
             panic!("unsupported ec value: {}", ec);
         }
     }
+    signal_hook(ctx);
     ctx
 }
 
@@ -90,10 +96,26 @@ pub fn lower_aarch64_irq(ctx: &mut TrapContext) -> &mut TrapContext {
         1020.. => {},
         _ => {panic!("irq {} not supported now", irq_num);},
     }
+    signal_hook(ctx);
     return ctx;
 }
 
 #[no_mangle]
 pub fn lower_aarch64_serror(_ctx: &mut TrapContext) {
     panic!("lower aarch64 serror");
+}
+
+pub fn signal_hook(ctx: &mut TrapContext) {
+    let signal = signal_handler();
+    match signal {
+        SignalCode::IGNORE => {}
+        SignalCode::Action(handler) => {
+            save_trap_ctx();
+            ctx.x[33] = handler.handler;
+            ctx.x[0] = handler.sig;
+        }
+        SignalCode::KILL(e) => {
+            exit(e)
+        }
+    }
 }

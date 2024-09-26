@@ -4,6 +4,7 @@ use tock_registers::{
     register_bitfields, register_structs,
     registers::{ReadOnly, ReadWrite},
 };
+use ITARGETSR::Offset0;
 
 register_bitfields! {
     u32,
@@ -46,11 +47,12 @@ register_structs! {
     #[allow(non_snake_case)]
     pub GICDBlock {
         (0x000 => CTLR: ReadWrite<u32, CTLR::Register>),
-        (0x004 => _reserved1),
-        (0x100 => ISENABLER: ReadWrite<u32>),
-        (0x104 => _reserved2),
-        (0x800 => ITARGETSR: [ReadOnly<u32, ITARGETSR::Register>; 8]),
-        (0x820 => @END),
+        (0x004 => TYPER: ReadOnly<u32, TYPER::Register>),
+        (0x008 => _reserved1),
+        (0x100 => ISENABLER: [ReadWrite<u32>; 32]),
+        (0x180 => _reserved2),
+        (0x800 => ITARGETSR: [ReadWrite<u32, ITARGETSR::Register>; 256]),
+        (0xC00 => @END),
     },
 
     #[allow(non_snake_case)]
@@ -80,18 +82,10 @@ impl GICD {
     pub fn enable(&self, irq_num: usize) {
         let enable_reg_index = irq_num >> 5;
         let enable_bit = 1u32 << (irq_num % 32);
-        match irq_num {
-            // PPI
-            0..=31 => {
-                let gicd = unsafe { &*(self.addr as *const GICDBlock) };
-                gicd.CTLR.write(CTLR::Enable::SET);
-                gicd.ISENABLER.set(gicd.ISENABLER.get() | enable_bit);
-            }
-            // SPI
-            _ => {
-                println!("[kernel] enable irq: {}", irq_num);
-            }
-        }
+        let gicd = unsafe { &*(self.addr as *const GICDBlock) };
+        gicd.CTLR.write(CTLR::Enable::SET);
+        gicd.ISENABLER[enable_reg_index].set(gicd.ISENABLER[enable_reg_index].get() | enable_bit);
+        gicd.ITARGETSR[irq_num / 4].write(ITARGETSR::Offset1.val(0xFF) + ITARGETSR::Offset0.val(0xFF) + ITARGETSR::Offset2.val(0xFF) + ITARGETSR::Offset3.val(0xFF));
     }
 }
 
