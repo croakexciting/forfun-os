@@ -16,7 +16,7 @@ use crate::ipc::semaphore::Semaphore;
 use crate::ipc::shm::Shm;
 use crate::mm::allocator::{asid_alloc, AisdHandler};
 use crate::mm::area::UserBuffer;
-use crate::arch::memory::page::{enable_va, PhysAddr, VirtAddr, VirtPage, PAGE_SIZE};
+use crate::arch::memory::page::{enable_va, flush_tlb, PhysAddr, VirtAddr, VirtPage, PAGE_SIZE};
 use crate::mm::pt::PageTable;
 use crate::mm::MemoryManager;
 use crate::arch::context::__switch;
@@ -191,21 +191,8 @@ impl TaskManager {
 
     pub fn read(&self, fd: usize, buf: *mut u8, len: usize) -> isize {
         let mut read = 0;
-        loop {
-            let mut inner = self.inner_access();
-            let ret = inner.read(fd, buf, len);
-            if ret < 0 {
-                return ret;
-            }
-
-            read += ret;
-            if (read as usize) < len {
-                drop(inner);
-                self.back_to_idle();
-            } else {
-                return read
-            }
-        }
+        let mut inner = self.inner_access();
+        return inner.read(fd, buf, len);
     }
 
     pub fn open(&self, name: String) -> isize {
@@ -867,6 +854,9 @@ impl Process {
         let kernel_sp = self.mm.runtime_push_context(trap_ctx);
         self.ctx = SwitchContext::new_with_restore_addr(kernel_sp);
         self.set_status(ProcessStatus::READY);
+
+        // flush tlb
+        flush_tlb(self.asid.0 as usize);
         Ok(())
     }
 

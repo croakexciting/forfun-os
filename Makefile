@@ -2,13 +2,16 @@ TARGET ?= riscv64gc-unknown-none-elf
 MODE ?= release
 ARCH ?= riscv64
 BOARD ?= riscv64_qemu
+IMG ?= sfs-riscv64.img
 
 ifeq ($(BOARD), riscv64_qemu)
 	TARGET = riscv64gc-unknown-none-elf
 	ARCH = riscv64
+	IMG = sfs-riscv64.img
 else ifeq ($(BOARD), aarch64_qemu)
 	TARGET = aarch64-unknown-none
 	ARCH = aarch64
+	IMG = sfs-aarch64.img
 endif
 
 .PHONY: build_kernel clean_kernel debug gdbclient \
@@ -40,11 +43,11 @@ debug:
 gdbclient:
 	${MAKE} -C os gdbclient
 
-createfs:
+createfs: build
 	@bash scripts/install_apps.sh ${TARGET} ${MODE} ${ARCH}
-	@rm -f sfs.img
-	@qemu-img create -f raw sfs.img 512M
-	./tools/sfs-pack -s ./appbins/ -t ./ create
+	@rm -f ${IMG}
+	@qemu-img create -f raw ${IMG} 512M
+	./tools/sfs-pack -s ./appbins/ -t ./ -n ${IMG} create
 
 kill:
 	@pkill -f qemu-system-

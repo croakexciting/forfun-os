@@ -1,7 +1,7 @@
 Cargo.lock
 target
 empty.img
-sfs.img
+*.img
 appbins
 *dtb
 *dts

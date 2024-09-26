@@ -19,10 +19,13 @@ pub fn print(args: fmt::Arguments) {
     Stdout.write_fmt(args).unwrap();
 }
 
-pub fn getchar() -> u8 {
+pub fn getchar() -> Option<u8> {
     let mut buf: [u8; 1] = [0; 1];
-    sys_read(STDIN, buf.as_mut_slice());
-    buf[0]
+    if sys_read(STDIN, buf.as_mut_slice()) == 1 {
+        return Some(buf[0]);
+    } else {
+        None
+    }
 }
 
 #[macro_export]

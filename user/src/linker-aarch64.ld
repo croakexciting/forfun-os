@@ -1,5 +1,5 @@
 
-OUTPUT_ARCH(riscv)
+OUTPUT_ARCH(aarch64)
 ENTRY(_start)
 
 BASE_ADDRESS = 0x10000000;
@@ -25,6 +25,7 @@ SECTIONS
         *(.bss .bss.*)
         *(.sbss .sbss.*)
     }
+    . = ALIGN(16K);
     /DISCARD/ : {
         *(.eh_frame)
         *(.debug*)

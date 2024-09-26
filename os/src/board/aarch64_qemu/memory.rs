@@ -7,7 +7,7 @@ pub const KERNEL_STACK_START: usize = 0x1_0000_0000;
 pub const KERNEL_STACK_SIZE: usize = 4096 * 16;
 
 // user stack - Framed
-pub const USER_STACK_START: usize = 0x8000_0000;
+pub const USER_STACK_START: usize = 0x4000_0000;
 pub const USER_STACK_SIZE: usize = 4096 * 2;
 
 // memory allocator area - Physical memory page

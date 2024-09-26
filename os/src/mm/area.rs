@@ -223,22 +223,28 @@ impl MapArea {
     }
 
     pub fn cow(&mut self, pt: &mut PageTable, vpn: VirtPage) -> Result<(), &'static str> {
-        // checkn vpn if shared
-        if let Some(index) = self.shared.iter().position(|&v| v.0 == vpn.0) {
-            self.shared.remove(index);
-            let data = copy_user_page_to_vector(vpn);
-            if (self.unmap_one(pt, vpn)) < 0 {
-                return Err("unmap failed");
-            }
-    
-            if let Some(_) = self.map_one(pt, vpn, None) {
-                copy_vector_to_user_page(data, vpn);
-                Ok(())
+        // check area if writable
+        if self.permission.contains(Permission::W) {
+        
+            // checkn vpn if shared
+            if let Some(index) = self.shared.iter().position(|&v| v.0 == vpn.0) {
+                self.shared.remove(index);
+                let data = copy_user_page_to_vector(vpn);
+                if (self.unmap_one(pt, vpn)) < 0 {
+                    return Err("unmap failed");
+                }
+
+                if let Some(_) = self.map_one(pt, vpn, None) {
+                    copy_vector_to_user_page(data, vpn);
+                    Ok(())
+                } else {
+                    return Err("remap failed");
+                }   
             } else {
-                return Err("remap failed");
-            }   
+                return Err("VPN is not shared");
+            }
         } else {
-            return Err("VPN is not shared");
+            return Err("VPN is not writeable");
         }
     }
 }

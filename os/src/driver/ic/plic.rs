@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 pub struct PLIC {
     addr: usize
 }

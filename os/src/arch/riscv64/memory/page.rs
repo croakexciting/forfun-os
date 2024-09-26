@@ -181,3 +181,7 @@ pub fn clear_flag(pte: usize, flags: PTEFlags) -> usize {
 
     p
 }
+
+pub unsafe fn flush_tlb(_asid: usize) {
+    asm!("sfence.vma");
+}
