@@ -30,6 +30,7 @@ pub fn main() -> i32 {
                     println!("");
                     if !line.is_empty() {
                         // get line len
+                        line.push('\0');
                         let fd = sys_open(&line.as_str());
                         if fd < 0 {
                             line.clear();

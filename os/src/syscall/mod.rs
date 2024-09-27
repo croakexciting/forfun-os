@@ -47,7 +47,7 @@ pub fn syscall(id: usize, args: [usize; 4]) -> isize {
     match id {
         SYSCALL_READ => sys_read(args[0], args[1] as *mut u8, args[2]),
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
-        SYSCALL_OPEN => sys_open(args[0] as *const i8),
+        SYSCALL_OPEN => sys_open(args[0] as *const i8, args[1] as usize),
         SYSCALL_LSEEK => sys_lseek(args[0], args[1]),
         SYSCALL_SIZE => sys_size(args[0]),
         SYSCALL_MMAP => sys_mmap(args[0] as usize, args[1] as usize),

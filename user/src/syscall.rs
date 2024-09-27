@@ -74,7 +74,7 @@ pub fn sys_write(fd: usize, buffer: &[u8]) -> isize {
 }
 
 pub fn sys_open(name: &str) -> isize {
-    syscall(SYSCALL_OPEN, [name.as_ptr() as usize, 0, 0, 0])
+    syscall(SYSCALL_OPEN, [name.as_ptr() as usize, name.len() as usize, 0, 0])
 }
 
 pub fn sys_lseek(fd: usize, seek: usize) -> isize {
