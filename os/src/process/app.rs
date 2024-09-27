@@ -60,20 +60,6 @@ impl TaskManager {
             inner.check_sem();
 
             let idle_ctx = inner.idle_ctx();
-            // 暂时简化处理，如果获取不到当前任务，会直接 panic
-            let current = inner.current_task(false).unwrap();
-            let current_status = current.lock().status;
-            if let RUNNING(tick) = current_status {
-                if tick - 1 > 0 {
-                    let current_ctx_ptr = current.lock().ctx_ptr();
-                    current.lock().set_status(RUNNING(tick - 1));
-                    drop(current);
-                    drop(inner);
-                    unsafe {__switch(idle_ctx, current_ctx_ptr);}
-                    continue;
-                }
-            }
-
             let next = inner.next_task().unwrap();
             let next_ctx_ptr = next.lock().ctx_ptr();
             let next_status = next.lock().status;
@@ -96,7 +82,8 @@ impl TaskManager {
                     unsafe { __switch(idle_ctx, next_ctx_ptr); }
                 }
                 SLEEP(a, b) => unsafe {
-                    if a + b < nanoseconds() {
+                    let c = nanoseconds();
+                    if a + b < c {
                         let tick = next.lock().tick;
                         next.lock().set_status(RUNNING(tick));
                         next.lock().activate();
@@ -104,6 +91,9 @@ impl TaskManager {
                         drop(inner);
                         unsafe { __switch(idle_ctx, next_ctx_ptr); }
                     } else {
+                        if a > c {
+                            next.lock().set_status(SLEEP(c, 0));
+                        }
                         continue;
                     }
                 }
