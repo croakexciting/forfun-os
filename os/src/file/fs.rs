@@ -32,8 +32,13 @@ impl Filesystem {
 
     pub fn open(&mut self, name: &str) -> Option<Arc<dyn File>> {
         if let Some(fs) = self.inner.clone() {
-            if let Ok(inode) = fs.root_inode().find(name) {
-                return Some(Arc::new(NormalFile::new(inode, super::FilePermission::all())))
+            match fs.root_inode().find(name) {
+                Ok(inode) => {
+                    return Some(Arc::new(NormalFile::new(inode, super::FilePermission::all())));
+                }
+                Err(e) => {
+                    println!("[kernel] Find file failed: {}", e);
+                }
             }
         }
 

@@ -12,7 +12,6 @@ xmas-elf = "0.9.1"
 derive_more = "0.99.7"
 spin = "0.9"
 virtio-drivers = "0.7.3"
-uart16550 = "0.0.1"
 rcore-fs = { git = "https://github.com/rcore-os/rcore-fs.git" }
 rcore-fs-sfs = { git = "https://github.com/rcore-os/rcore-fs.git" }
 
@@ -21,12 +20,13 @@ riscv = { version = "0.10.1", optional = true}
 aarch64-cpu = { version = "9.x.x", optional = true}
 tock-registers = { version = "0.8.x", default-features = false, features = ["register_types"], optional = true }
 arm_pl011 = { version = "0.1", optional = true }
+ns16550a = { version = "0.4", optional = true }
 
 [features]
-default = ["aarch64_qemu"]
+default = ["riscv64_qemu"]
 
 # board select
-riscv64_qemu = ["riscv64"]
+riscv64_qemu = ["riscv64", "ns16550a"]
 k210 = ["riscv64"]
 aarch64_qemu = ["aarch64", "arm_pl011"]
 

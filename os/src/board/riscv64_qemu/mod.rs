@@ -4,18 +4,24 @@ pub mod serial;
 pub mod memory;
 
 use crate::{
-    driver::{self, block::{qemu_blk::QemuBlk, BlkDeviceForFs}, serial::qemu_serial::Uart}, file::fs::FILESYSTEM, process, utils::type_extern::RefCellWrap
+    driver::{
+        self, 
+        block::{qemu_blk::QemuBlk, BlkDeviceForFs}, 
+    }, 
+    file::fs::FILESYSTEM, 
+    process, 
+    utils::type_extern::RefCellWrap
 };
 use alloc::sync::Arc;
 use lazy_static::*;
 use interrupt::PLIC_ADDR;
+use serial::{uart_init, UART0_ADDR};
 use spin::mutex::Mutex;
 
 // 在这里创建一些驱动的单例
-
 lazy_static! {
-    pub static ref CONSOLE: RefCellWrap<Uart> = unsafe {
-        RefCellWrap::new(serial::init())
+    pub static ref CONSOLE: RefCellWrap<ns16550a::Uart> = unsafe {
+        RefCellWrap::new(uart_init(UART0_ADDR))
     };
 
     pub static ref PLIC: RefCellWrap<driver::ic::plic::PLIC> = unsafe {
@@ -28,7 +34,7 @@ const BLK_HEADER_ADDR: usize = 0x1000_8000;
 
 pub fn enable_virtual_mode() {
     let uart_va = process::map_peripheral(serial::UART0_ADDR, 0x1000);
-    CONSOLE.exclusive_access().set_addr(uart_va as usize);
+    *CONSOLE.exclusive_access() = ns16550a::Uart::new(uart_va as usize);
 
     let blk_va = process::map_peripheral(BLK_HEADER_ADDR, 0x8000);
     // create fs in here
@@ -54,10 +60,14 @@ pub fn shutdown(failure: bool) -> ! {
 }
 
 pub fn console_putchar(c: char) {
-    CONSOLE.exclusive_access().put(c);
+    CONSOLE.exclusive_access().put(c as u8);
 }
 
 #[allow(deprecated)]
 pub fn console_getchar() -> u8 {
-    sbi_rt::legacy::console_getchar() as u8
+    if let Some(c) = CONSOLE.exclusive_access().get() {
+        return c;
+    } else {
+        return 0;
+    }
 }

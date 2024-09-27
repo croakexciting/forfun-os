@@ -11,7 +11,7 @@ pub fn sys_read(fd: usize, buf: *mut u8, len: usize) -> isize {
     read(fd, buf, len)
 }
 
-pub fn sys_open(name: *const i8) -> isize {
+pub fn sys_open(name: *const i8, _len: usize) -> isize {
     let str = copy_str_with_user(name);
     open(str)
 }
