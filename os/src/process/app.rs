@@ -149,11 +149,6 @@ impl TaskManager {
         inner.exec(elf)
     }
 
-    pub fn kernel_init(&self) -> isize {
-        let mut inner = self.inner_access();
-        inner.kernel_init()
-    }
-
     pub fn create_initproc(&self, tick: usize) -> isize {
         let mut inner = self.inner_access();
         inner.create_initproc(tick)
@@ -398,16 +393,6 @@ impl AppManagerInner {
     // get idle ctx
     pub fn idle_ctx(&mut self) -> *mut SwitchContext {
         &mut self.idle_ctx as *mut _
-    }
-
-    pub fn kernel_init(&mut self) -> isize {
-        if let None = self.kernel_mm.init_kernel_area() {
-            println!("[kernel] initproc create kernel pagetable failed");
-            return -1;
-        }
-
-        enable_va(0, self.kernel_mm.root_ppn().0);
-        0
     }
 
     // return app id, if create failed, return -1

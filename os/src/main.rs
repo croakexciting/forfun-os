@@ -4,6 +4,7 @@
 #![feature(error_in_core)]
 #![feature(alloc_error_handler)]
 #![feature(const_slice_from_raw_parts_mut)]
+#![feature(naked_functions)]
 
 mod arch;
 mod board;
@@ -21,7 +22,7 @@ mod syscall;
 extern crate alloc;
 use board::board_init;
 use linked_list_allocator::LockedHeap;
-use process::{create_proc, kernel_init, run_tasks};
+use process::{create_proc, run_tasks};
 use crate::board::timer;
 
 fn clear_bss() {
@@ -51,10 +52,6 @@ pub fn init_heap() {
         fn eheap();
     }
 
-    println!(
-        "[kernel] heap start at {:#x}, end at {:#x}",
-        sheap as usize, eheap as usize
-    );
     unsafe {
         HEAP_ALLOCATOR
             .lock()
@@ -63,12 +60,12 @@ pub fn init_heap() {
 }
 
 #[no_mangle]
+#[link_section = ".text.entry"]
 pub fn os_main() -> ! {
     clear_bss();
     init_heap();
     arch::init();
     timer::set_trigger();
-    kernel_init();
     board_init();
     create_proc();
     run_tasks();

@@ -10,7 +10,7 @@ use virtio_drivers::{
     BufferDirection, Hal, PhysAddr
 };
 
-use crate::mm::{dma::{dma_alloc, dma_dealloc}, pt::translate};
+use crate::{arch::memory::page::kernel_virt_to_phys, mm::dma::{dma_alloc, dma_dealloc}};
 
 use super::BlockDevice;
 
@@ -96,13 +96,8 @@ unsafe impl Hal for HalImpl {
     }
 
     unsafe fn share(buffer: NonNull<[u8]>, _direction: BufferDirection) -> PhysAddr {
-        let ppn = crate::arch::memory::page::root_ppn();
-        if ppn == 0 {
-            buffer.as_ptr() as *mut u8 as PhysAddr
-        } else {
-            let va = buffer.as_ptr() as *mut u8 as usize;
-            translate(va.into()).unwrap().0 as PhysAddr
-        }
+        let va = buffer.as_ptr() as *mut u8 as usize;
+        kernel_virt_to_phys(va.into()).0 as PhysAddr
     }
 
     unsafe fn unshare(_paddr: PhysAddr, _buffer: NonNull<[u8]>, _direction: BufferDirection) {

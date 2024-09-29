@@ -95,7 +95,7 @@ pub fn frame_alloc() -> Option<PhysFrame> {
 
 pub fn kernel_frame_alloc() -> Option<PhysFrame> {
     let frame = KERNEL_FRAME_ALLOCATOR.exclusive_access().alloc()?;
-    frame.ppn.clear_page();
+    kernel_page_phys_to_virt(frame.ppn).clear_page();
     Some(frame)
 }
 

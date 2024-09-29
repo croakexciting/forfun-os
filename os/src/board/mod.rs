@@ -22,7 +22,6 @@ pub fn external_irq_handler() {
 }
 
 pub fn board_init() {
-    peri::enable_virtual_mode();
     peri::board_init()
 }
 

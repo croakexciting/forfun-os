@@ -53,6 +53,7 @@ endif
 
 build:
 	@echo Platform: $(BOARD)
+	@cp src/board/${BOARD}/linker.ld src/arch/aarch64
 	@cargo build --target ${TARGET} $(MODE_ARG) --no-default-features --features ${BOARD}
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary ${KERNEL_BIN}
 

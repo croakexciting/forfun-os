@@ -28,10 +28,6 @@ pub fn create_proc() -> isize {
     TASK_MANAGER.create_initproc(5)
 }
 
-pub fn kernel_init() -> isize {
-    TASK_MANAGER.kernel_init()
-}
-
 pub fn run_tasks() -> ! {
     TASK_MANAGER.run_task()
 }

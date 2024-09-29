@@ -29,32 +29,32 @@ pub unsafe fn flush_tlb(asid: usize) {
 }
 
 pub fn enable_va(id: usize, ppn: usize) {
-    MAIR_EL1.write(
-        MAIR_EL1::Attr1_Normal_Outer::WriteBack_NonTransient_ReadWriteAlloc
-        + MAIR_EL1::Attr1_Normal_Inner::WriteBack_NonTransient_ReadWriteAlloc
-        + MAIR_EL1::Attr0_Device::nonGathering_nonReordering_EarlyWriteAck
-    );
+    // MAIR_EL1.write(
+    //     MAIR_EL1::Attr1_Normal_Outer::WriteBack_NonTransient_ReadWriteAlloc
+    //     + MAIR_EL1::Attr1_Normal_Inner::WriteBack_NonTransient_ReadWriteAlloc
+    //     + MAIR_EL1::Attr0_Device::nonGathering_nonReordering_EarlyWriteAck
+    // );
 
     TTBR0_EL1.write(TTBR0_EL1::ASID.val(id as u64) + TTBR0_EL1::BADDR.val((ppn << 11) as u64));
 
-    TCR_EL1.write(
-        TCR_EL1::T0SZ.val(25)
-        + TCR_EL1::TBI0::Used
-        + TCR_EL1::IPS::Bits_44
-        + TCR_EL1::TG0::KiB_4
-        + TCR_EL1::SH0::Inner
-        + TCR_EL1::ORGN0::WriteBack_ReadAlloc_WriteAlloc_Cacheable
-        + TCR_EL1::IRGN0::WriteBack_ReadAlloc_WriteAlloc_Cacheable
-        + TCR_EL1::EPD0::EnableTTBR0Walks
-        + TCR_EL1::A1::TTBR0
-        + TCR_EL1::EPD1::DisableTTBR1Walks
-    );
+    // TCR_EL1.write(
+    //     TCR_EL1::T0SZ.val(25)
+    //     + TCR_EL1::TBI0::Used
+    //     + TCR_EL1::IPS::Bits_44
+    //     + TCR_EL1::TG0::KiB_4
+    //     + TCR_EL1::SH0::Inner
+    //     + TCR_EL1::ORGN0::WriteBack_ReadAlloc_WriteAlloc_Cacheable
+    //     + TCR_EL1::IRGN0::WriteBack_ReadAlloc_WriteAlloc_Cacheable
+    //     + TCR_EL1::EPD0::EnableTTBR0Walks
+    //     + TCR_EL1::A1::TTBR0
+    //     + TCR_EL1::EPD1::DisableTTBR1Walks
+    // );
 
     unsafe {flush_tlb(id);}
     
-    barrier::isb(barrier::SY);
-    SCTLR_EL1.modify(SCTLR_EL1::M::Enable + SCTLR_EL1::C::Cacheable + SCTLR_EL1::I::Cacheable);
-    barrier::isb(barrier::SY);
+    // barrier::isb(barrier::SY);
+    // SCTLR_EL1.modify(SCTLR_EL1::M::Enable + SCTLR_EL1::C::Cacheable + SCTLR_EL1::I::Cacheable);
+    // barrier::isb(barrier::SY);
 }
 
 pub fn pte(ppn: usize, flags: PTEFlags) -> usize {
