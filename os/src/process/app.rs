@@ -397,11 +397,11 @@ impl AppManagerInner {
         let mut initproc = Process::new(tick);
 
         // initialize kernel pt
-        #[cfg(feature = "riscv64_qemu")]
-        if let None = initproc.mm.add_kernel_pt(&mut self.kernel_mm) {
-            println!("[kernel] initproc add kernel pagetable failed");
-            return -1;
-        }
+        // #[cfg(feature = "riscv64_qemu")]
+        // if let None = initproc.mm.add_kernel_pt(&mut self.kernel_mm) {
+        //     println!("[kernel] initproc add kernel pagetable failed");
+        //     return -1;
+        // }
         // read elf from fs
         let fd = initproc.open("shell");
         if fd < 0 {

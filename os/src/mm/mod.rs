@@ -165,8 +165,8 @@ impl MemoryManager {
 
     pub fn fork(&mut self, parent: &mut Self) {
         // append kernel stack
-        #[cfg(feature = "riscv64_qemu")]
-        self.add_kernel_pt(parent);
+        // #[cfg(feature = "riscv64_qemu")]
+        // self.add_kernel_pt(parent);
         
         // 将父进程的所有 app area 复制一份，通过智能指针来实现自动 drop
         self.app_areas.reserve(parent.app_areas.len());
@@ -291,9 +291,9 @@ impl MemoryManager {
         }
     }
 
-    #[cfg(feature = "riscv64_qemu")]
-    pub fn add_kernel_pt(&mut self, parent: &mut Self) {
-        self.kernel_pte = parent.kernel_pte;
-        self.pt.set_pte_with_level(parent.kernel_pte, VirtAddr(KERNEL_START_ADDR).into(), 0)
-    }
+    // #[cfg(feature = "riscv64_qemu")]
+    // pub fn add_kernel_pt(&mut self, parent: &mut Self) {
+    //     self.kernel_pte = parent.kernel_pte;
+    //     self.pt.set_pte_with_level(parent.kernel_pte, VirtAddr(KERNEL_START_ADDR).into(), 0)
+    // }
 }

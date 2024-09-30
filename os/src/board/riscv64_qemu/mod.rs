@@ -32,18 +32,18 @@ lazy_static! {
 // blk0
 const BLK_HEADER_ADDR: usize = 0x1000_8000;
 
-pub fn enable_virtual_mode() {
-    let uart_va = process::map_peripheral(serial::UART0_ADDR, 0x1000);
-    *CONSOLE.exclusive_access() = ns16550a::Uart::new(uart_va as usize);
+// pub fn enable_virtual_mode() {
+//     let uart_va = process::map_peripheral(serial::UART0_ADDR, 0x1000);
+//     *CONSOLE.exclusive_access() = ns16550a::Uart::new(uart_va as usize);
 
-    let blk_va = process::map_peripheral(BLK_HEADER_ADDR, 0x8000);
-    // create fs in here
-    let blk_device = BlkDeviceForFs::new(Arc::new(Mutex::new(QemuBlk::new(blk_va as usize))));
-    FILESYSTEM.exclusive_access().set_sfs(blk_device);
+//     let blk_va = process::map_peripheral(BLK_HEADER_ADDR, 0x8000);
+//     // create fs in here
+//     let blk_device = BlkDeviceForFs::new(Arc::new(Mutex::new(QemuBlk::new(blk_va as usize))));
+//     FILESYSTEM.exclusive_access().set_sfs(blk_device);
 
-    let plic_va = process::map_peripheral(PLIC_ADDR, 0x40_0000);
-    PLIC.exclusive_access().set_addr(plic_va as usize)
-}
+//     let plic_va = process::map_peripheral(PLIC_ADDR, 0x40_0000);
+//     PLIC.exclusive_access().set_addr(plic_va as usize)
+// }
 
 pub fn board_init() {
     interrupt::plic_init();
