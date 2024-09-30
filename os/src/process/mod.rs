@@ -11,7 +11,6 @@ use spin::mutex::Mutex;
 
 use crate::{
     arch::memory::page::{VirtAddr, VirtPage}, 
-    board::peri::memory::INITPROC_LOAD_ADDR, 
     mm::area::UserBuffer, 
     utils::type_extern::RefCellWrap
 };
@@ -124,10 +123,6 @@ pub fn ummap(addr: usize) -> isize {
 
 pub fn mmap_with_addr(pa: usize, size: usize, permission: usize, user: bool) -> isize {
     TASK_MANAGER.mmap_with_addr(pa, size, permission, user)
-}
-
-pub fn map_peripheral(pa: usize, size: usize) -> isize {
-    TASK_MANAGER.map_peripheral(pa, size)
 }
 
 pub fn shm_open(name: String, size: usize, permission: usize) -> isize {

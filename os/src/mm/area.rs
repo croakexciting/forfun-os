@@ -76,11 +76,6 @@ impl MapArea {
     pub fn map_one(&mut self, pt: &mut PageTable, vpn: VirtPage, defined_ppn: Option<PhysPage>) -> Option<PageTableEntry> {
         let ppn: PhysPage;
         match self.map_type {
-            MapType::Identical => {
-                // 恒等映射，用于内核内存（除了对应 app 的 kernel stack）
-                // 这些内存是与 app 完全无关的，只是放到每个 app 的页表中，避免其进入内核态后，无法正确运行
-                ppn = PhysPage(vpn.0);
-            }
             MapType::Framed => {
                 let frame = frame_alloc()?;
                 ppn = frame.ppn;
@@ -252,7 +247,6 @@ impl MapArea {
 #[derive(Copy, Clone, Debug)]
 /// map type for memory set: identical or framed
 pub enum MapType {
-    Identical,
     Framed,
     Defined,
 }

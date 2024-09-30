@@ -1,6 +1,7 @@
 use bitflags::bitflags;
 use crate::arch::inner::memory::page;
 
+const VA_VALID_WIDTH: usize = page::VA_VALID_WIDTH;
 const PN_LEVEL_NUM: usize = page::PN_LEVEL_NUM;
 const PN_BITSIZE: usize = page::PN_BITSIZE;
 pub const INPAGE_OFFSET_WIDTH: usize = page::INPAGE_OFFSET_WIDTH;
@@ -91,6 +92,14 @@ impl VirtAddr {
 
     pub fn reduce(&self, i: usize) -> Self {
         Self(self.0 - i)
+    }
+
+    pub fn is_kernel(&self) -> bool {
+        if self.0 >> (VA_VALID_WIDTH - 1) > 0 {
+            return true;
+        } else {
+            false
+        }
     }
 }
 
@@ -262,6 +271,7 @@ pub fn kernel_page_phys_to_virt(phys: PhysPage) -> VirtPage {
     (0xFFFF_FFFF_0000_0usize + phys.0).into()
 }
 
+#[allow(unused)]
 pub fn kernel_page_virt_to_phys(virt: VirtPage) -> PhysPage {
     (virt.0 - 0xFFFF_FFFF_0000_0usize).into()
 }

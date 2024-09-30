@@ -1,0 +1,68 @@
+OUTPUT_ARCH(aarch64)
+ENTRY(__trampoline)
+PROVIDE(_heap_size = 0x100000);
+PROVIDE(_stack_size = 0x10000);
+PROVIDE(_kpt_size = 0x1000);
+
+SECTIONS
+{
+    .trampoline ALIGN(4K) :
+    {
+        strampoline = .;
+        KEEP(*(.trampoline.entry))
+        etrampoline = .;
+    } > TRAMPOLINE
+
+    .kpt (NOLOAD) : ALIGN(4K) 
+    {
+        skpt = .;
+        . += _kpt_size;
+        ekpt = .;
+    } > TRAMPOLINE
+
+    .text ALIGN(4K) : AT(0x40002000)
+    {
+        KEEP(*(.text.entry))
+        *(.text .text.*)
+    } > VIRTUAL
+
+    .rodata : ALIGN(4K)
+    {
+        *(.rodata .rodata.*)
+        *(.srodata .srodata.*)
+    } > VIRTUAL
+
+    .data : ALIGN(4K)
+    {
+        *(.data .data.*)
+        *(.sdata .sdata.*)
+    } > VIRTUAL
+
+    .bss : ALIGN(4K)
+    {
+        sbss = .;
+        *(.bss .bss.*)
+        *(.sbss .sbss.*)
+    } > VIRTUAL
+    ebss = .;
+
+    /* reserve 1M space for kernel heap*/
+    .heap (NOLOAD) : ALIGN(4K)
+    {
+        sheap = .;
+        . += _heap_size;
+        eheap = .;
+    } > VIRTUAL
+
+    /* stack grow from high address to low address */
+    .stack (NOLOAD) : ALIGN(4K)
+    {
+        estack = .;
+        . += _stack_size;
+        sstack = .;
+    } > VIRTUAL
+
+    /DISCARD/ : {
+        *(.eh_frame)
+    }
+}

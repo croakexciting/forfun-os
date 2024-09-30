@@ -4,7 +4,7 @@ use core::borrow::BorrowMut;
 use alloc::vec::Vec;
 use super::allocator::{kernel_frame_alloc, PhysFrame};
 use crate::arch::memory::page::{
-    kernel_phys_to_virt, root_ppn, PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage
+    kernel_phys_to_virt, kernel_virt_to_phys, root_ppn, PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage
 };
 
 // Every app has it's own page table
@@ -80,6 +80,7 @@ impl PageTable {
         None
     }
 
+    #[allow(unused)]
     pub fn find_pte_with_level(&mut self, vpn: VirtPage, level: usize, readonly: bool) -> Option<&mut PageTableEntry> {
         let idx = vpn.index();
         let mut vpn: VirtPage = kernel_phys_to_virt(self.root.into()).into();
@@ -153,6 +154,7 @@ impl PageTable {
         Some(old_pte)
     }
 
+    #[allow(unused)]
     pub fn set_pte_with_level(&mut self, new_pte: PageTableEntry, vpn: VirtPage, level: usize) -> Option<PageTableEntry> {
         let pte = self.find_pte_with_level(vpn, level, false)?;
         let old_pte = pte.clone();
@@ -215,5 +217,15 @@ impl Iterator for PageTable {
         }
 
         None
+    }
+}
+
+pub fn translate(va: VirtAddr) -> Option<PhysAddr> {
+    if va.is_kernel() {
+        Some(kernel_virt_to_phys(va))
+    } else {        
+        let ppn = root_ppn();
+        let pt = PageTable::new_with_ppn(ppn);
+        pt.translate(va)
     }
 }

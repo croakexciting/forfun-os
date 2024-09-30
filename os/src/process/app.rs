@@ -246,11 +246,6 @@ impl TaskManager {
         inner.mmap_with_addr(pa, size, permission, user)
     }
 
-    pub fn map_peripheral(&self, pa: usize, size: usize) -> isize {
-        let mut inner = self.inner.exclusive_access();
-        inner.map_peripheral(pa, size)
-    }
-
     pub fn create_or_open_shm(&self, name: String, size: usize, permission: usize) -> isize {
         assert_eq!(size % PAGE_SIZE, 0);
         let mut inner = self.inner.exclusive_access();
@@ -400,7 +395,9 @@ impl AppManagerInner {
     pub fn create_initproc(&mut self, tick: usize) -> isize {
         // just add a process at the tail
         let mut initproc = Process::new(tick);
+
         // initialize kernel pt
+        #[cfg(feature = "riscv64_qemu")]
         if let None = initproc.mm.add_kernel_pt(&mut self.kernel_mm) {
             println!("[kernel] initproc add kernel pagetable failed");
             return -1;
@@ -568,10 +565,6 @@ impl AppManagerInner {
         self.current_task(true).unwrap().lock().mmap_with_addr(pa.into(), size, permission, user)
     }
     
-    pub fn map_peripheral(&mut self, pa: usize, size: usize) -> isize {
-        self.kernel_mm.map_peripheral(pa.into(), size)
-    }
-
     pub fn create_or_open_shm(&mut self, name: String, pn: usize, permission: usize) -> isize {
         let current_task = self.current_task(true).unwrap();
         let pid = current_task.lock().pid.0;

@@ -20,22 +20,45 @@ use core::arch::asm;
 pub extern "C" fn __trampoline() {
   unsafe {
     asm!(
+      /*
+        MAIR_EL1.write(
+            MAIR_EL1::Attr1_Normal_Outer::WriteBack_NonTransient_ReadWriteAlloc
+            + MAIR_EL1::Attr1_Normal_Inner::WriteBack_NonTransient_ReadWriteAlloc
+            + MAIR_EL1::Attr0_Device::nonGathering_nonReordering_EarlyWriteAck
+        );
+       */
       "ldr x9, =0xff04",
       "msr MAIR_EL1, x9",
+      /*
+        TCR_EL1.write(
+            TCR_EL1::T0SZ.val(25)
+            + TCR_EL1::TBI0::Used
+            + TCR_EL1::IPS::Bits_44
+            + TCR_EL1::TG0::KiB_4
+            + TCR_EL1::SH0::Inner
+            + TCR_EL1::ORGN0::WriteBack_ReadAlloc_WriteAlloc_Cacheable
+            + TCR_EL1::IRGN0::WriteBack_ReadAlloc_WriteAlloc_Cacheable
+            + TCR_EL1::EPD0::EnableTTBR0Walks
+            + TCR_EL1::A1::TTBR0
+            + TCR_EL1::EPD1::DisableTTBR1Walks
+        );
+       */ 
       "ldr x9, =0x4B5193519",
       "msr TCR_EL1, x9",
-      "ldr x9, =0x4037F000",
+      "adrp x9, skpt",
       "msr TTBR1_EL1, x9",
       "msr TTBR0_EL1, x9",
 
-      "ldr x10, =0x40000000",
+      // Set Identical map for trampoline
+      "adrp x10, strampoline",
       "lsr x11, x10, #30",
       "and x11, x11, #0x1FF",
       "lsl x11, x11, #3",
       "add x11, x9, x11",
-      "ldr x12, =0x40000705",
-      "str x12, [x11]",
+      "movk x10, 0x0705, lsl #0",
+      "str x10, [x11]",
 
+      // Set 0xFFFFFFFF00000000 ~ 0xFFFFFFFFFFFFFFFF for kernel space
       "ldr x10, =0xFFFFFFFF00000000",
       "lsr x11, x10, #30",
       "and x11, x11, #0x1FF",
@@ -81,7 +104,7 @@ pub extern "C" fn __trampoline() {
       "adrp x0, sstack",
       "add x0, x0, :lo12:sstack",
       "mov sp, x0",
-      "ldr x10, =0xFFFFFFFF41000000",
+      "adrp x10, os_main",
       "br x10",
       options(noreturn)
     );

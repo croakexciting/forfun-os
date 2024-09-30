@@ -4,14 +4,12 @@ pub mod area;
 pub mod elf;
 pub mod buddy;
 pub mod dma;
-pub mod peripheral;
 
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use area::{MapArea, Permission, MapType};
-use peripheral::peripheral_alloc;
 use crate::arch::memory::page::{
-    PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage, PAGE_SIZE
+    PhysAddr, PhysPage, VirtAddr, VirtPage, PAGE_SIZE
 };
 use buddy::BuddyAllocator;
 use pt::PageTable;
@@ -27,7 +25,6 @@ pub struct MemoryManager {
     app_areas: Vec<Arc<RwLock<MapArea>>>,
     // 堆可用区域，左闭右开的集合
     buddy_alloctor: Option<BuddyAllocator>,
-    kernel_pte: PageTableEntry,
 
     _kernel_area: Vec<MapArea>,
 }
@@ -54,7 +51,6 @@ impl MemoryManager {
             kernel_stack_area,
             app_areas,
             buddy_alloctor: None,
-            kernel_pte: PageTableEntry(0),
             _kernel_area,
         }
     }
@@ -169,6 +165,7 @@ impl MemoryManager {
 
     pub fn fork(&mut self, parent: &mut Self) {
         // append kernel stack
+        #[cfg(feature = "riscv64_qemu")]
         self.add_kernel_pt(parent);
         
         // 将父进程的所有 app area 复制一份，通过智能指针来实现自动 drop
@@ -294,71 +291,8 @@ impl MemoryManager {
         }
     }
 
-    pub fn map_peripheral(&mut self, pa: PhysAddr, size: usize) -> isize {
-        let p = Permission::R | Permission::W | Permission::X;
-
-        let mut pn = size / PAGE_SIZE;
-        if (size % PAGE_SIZE) != 0 {
-            pn += 1;
-        }
-
-        let mut ppns: Vec<PhysPage> = Vec::with_capacity(pn);
-        let mut start_ppn: PhysPage = pa.into();
-
-        let offset = pa.0 % PAGE_SIZE;
-
-        for _ in 0..pn {
-            ppns.push(start_ppn);
-            start_ppn = start_ppn.next();
-        }
-
-        if let Some(vpa_start) = peripheral_alloc(pn) {
-            let mut new_area = MapArea::new(
-                vpa_start.into(), 
-                (vpa_start + size).into(), 
-                MapType::Defined, 
-                p
-            );
-            new_area.map_defined(&mut self.pt, &ppns);
-            self._kernel_area.push(new_area);
-            (vpa_start + offset) as isize
-        } else {
-            -1
-        }
-    }
-
-    /*
-        如果每个进程的页表都管理一套 kernel area，相当浪费内存
-        计划是在 0 级（最高级）页表上留一个页表项指向一个 1 级页表
-        这个页表存储 kernel pte，每个进程 0 级页表均指向它，这样实现了 kernel pte 共享
-        一个一级页表可以指向 1G 内存，内核空间也够用，kernel 和外设地址都放在这里
-    */
-    pub fn init_kernel_area(&mut self) -> Option<PageTableEntry> {
-        let mut kcode = MapArea::new(
-            KERNEL_START_ADDR.into(),
-            KERNEL_END_ADDR.into(),
-            MapType::Identical,
-            Permission::R | Permission::W | Permission::X
-        );
-
-        kcode.map(&mut self.pt);
-        self._kernel_area.push(kcode);
-
-        let mut dma_area = MapArea::new(
-            VirtAddr::from(DMA_START_ADDR), 
-            VirtAddr::from(DMA_END_ADDR), 
-            MapType::Identical,
-            Permission::R | Permission::W
-        );
-        dma_area.map(&mut self.pt);
-        self._kernel_area.push(dma_area);
-
-        let pte = self.pt.find_pte_with_level(VirtAddr(KERNEL_START_ADDR).into(), 0, true)?;
-        self.kernel_pte = pte.clone();
-        Some(self.kernel_pte)
-    }
-
-    pub fn add_kernel_pt(&mut self, parent: &mut Self) -> Option<PageTableEntry> {
+    #[cfg(feature = "riscv64_qemu")]
+    pub fn add_kernel_pt(&mut self, parent: &mut Self) {
         self.kernel_pte = parent.kernel_pte;
         self.pt.set_pte_with_level(parent.kernel_pte, VirtAddr(KERNEL_START_ADDR).into(), 0)
     }
