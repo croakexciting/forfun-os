@@ -3,10 +3,7 @@ use bitflags::bitflags;
 use riscv::register;
 use crate::arch::memory::page::PTEFlags;
 
-pub const PA_VALID_WIDTH: usize = 56;
 pub const VA_VALID_WIDTH: usize = 39;
-pub const PPN_VALID_WIDTH: usize = 44;
-pub const VPN_VALID_WIDTH: usize = 27;
 pub const INPAGE_OFFSET_WIDTH: usize = 12;
 pub const PAGE_SIZE: usize = 0x1000;
 pub const PN_LEVEL_NUM: usize = 3;

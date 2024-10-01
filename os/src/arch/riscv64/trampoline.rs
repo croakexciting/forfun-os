@@ -64,6 +64,10 @@ pub extern "C" fn __trampoline() {
             "sfence.vma",
             "lui t0, %hi(sstack)",
             "addi t0, t0, %lo(sstack)",
+            "mv sp, t0",
+            "lui t0, %hi(os_main)",
+            "addi t0, t0, %lo(os_main)",
+            "jalr t1, t0, 0",
             options(noreturn)
         )
     }
