@@ -16,7 +16,7 @@ use pt::PageTable;
 use spin::rwlock::RwLock;
 
 use crate::arch::context::TrapContext;
-use crate::board::peri::memory::*;
+use crate::board::inner::memory::*;
 
 // The memory manager for a process
 pub struct MemoryManager {

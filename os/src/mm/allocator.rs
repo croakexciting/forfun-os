@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use lazy_static::*;
 use crate::utils::type_extern::RefCellWrap;
 use crate::arch::memory::page::*;
-use crate::board::peri::memory::{
+use crate::board::inner::memory::{
     KERNEL_ALLOCATOR_START,
     ALLOCATOR_START,
     ALLOCATOR_END,

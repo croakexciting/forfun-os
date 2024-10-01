@@ -1,7 +1,7 @@
-pub mod serial;
 pub mod memory;
 pub mod interrupt;
 pub mod timer;
+pub mod peripheral;
 
 use alloc::sync::Arc;
 use lazy_static::*;
@@ -15,8 +15,8 @@ use crate::{
 
 lazy_static! {
     pub static ref CONSOLE: RefCellWrap<arm_pl011::Pl011Uart> = unsafe {
-        RefCellWrap::new(serial::init(
-            kernel_phys_to_virt(serial::UART0_ADDR.into()).0
+        RefCellWrap::new(peripheral::init_serial(
+            kernel_phys_to_virt(peripheral::UART0_ADDR.into()).0
         ))
     };
 
@@ -43,9 +43,6 @@ pub fn console_getchar() -> u8 {
     }
 }
 
-// blk0
-const BLK_HEADER_ADDR: usize = 0xA00_3E00;
-
 pub fn board_init() {
     CONSOLE.exclusive_access().init();
     CONSOLE.exclusive_access().ack_interrupts();
@@ -56,7 +53,7 @@ pub fn board_init() {
 
     let blk_device = BlkDeviceForFs::new(
         Arc::new(Mutex::new(QemuBlk::new(
-            kernel_phys_to_virt(BLK_HEADER_ADDR.into()).0
+            kernel_phys_to_virt(peripheral::BLK_HEADER_ADDR.into()).0
         ))));
     FILESYSTEM.exclusive_access().set_sfs(blk_device);
 }

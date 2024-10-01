@@ -23,7 +23,7 @@ arm_pl011 = { version = "0.1", optional = true }
 ns16550a = { version = "0.4", optional = true }
 
 [features]
-default = ["riscv64_qemu"]
+default = ["aarch64_qemu"]
 
 # board select
 riscv64_qemu = ["riscv64", "ns16550a"]
