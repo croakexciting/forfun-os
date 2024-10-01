@@ -1,10 +1,7 @@
 use bitflags::bitflags;
 use crate::arch::inner::memory::page;
 
-const PA_VALID_WIDTH: usize = page::PA_VALID_WIDTH;
 const VA_VALID_WIDTH: usize = page::VA_VALID_WIDTH;
-const PPN_VALID_WIDTH: usize = page::PPN_VALID_WIDTH;
-const VPN_VALID_WIDTH: usize = page::VPN_VALID_WIDTH;
 const PN_LEVEL_NUM: usize = page::PN_LEVEL_NUM;
 const PN_BITSIZE: usize = page::PN_BITSIZE;
 pub const INPAGE_OFFSET_WIDTH: usize = page::INPAGE_OFFSET_WIDTH;
@@ -24,13 +21,13 @@ pub struct VirtPage(pub usize);
 
 impl From<usize> for PhysAddr {
     fn from(value: usize) -> Self {
-        Self(value & ((1 << PA_VALID_WIDTH) -1))
+        Self(value)
     }
 }
 
 impl From<usize> for PhysPage {
     fn from(value: usize) -> Self {
-        Self(value & ((1 << PPN_VALID_WIDTH) -1))
+        Self(value)
     }
 }
 
@@ -48,13 +45,13 @@ impl From<PhysPage> for usize {
 
 impl From<usize> for VirtAddr {
     fn from(value: usize) -> Self {
-        Self(value & ((1 << VA_VALID_WIDTH) -1))
+        Self(value)
     }
 }
 
 impl From<usize> for VirtPage {
     fn from(value: usize) -> Self {
-        Self(value & ((1 << VPN_VALID_WIDTH) -1))
+        Self(value)
     }
 }
 
@@ -96,6 +93,14 @@ impl VirtAddr {
     pub fn reduce(&self, i: usize) -> Self {
         Self(self.0 - i)
     }
+
+    pub fn is_kernel(&self) -> bool {
+        if self.0 >> (VA_VALID_WIDTH - 1) > 0 {
+            return true;
+        } else {
+            false
+        }
+    }
 }
 
 impl From<PhysAddr> for PhysPage {
@@ -133,11 +138,6 @@ impl PhysPage {
         unsafe {core::slice::from_raw_parts_mut(addr.0 as *mut u8, PAGE_SIZE)}
     }
 
-    pub fn clear_page(&self) {
-        let slice = self.bytes_array();
-        slice.fill(0);
-    }
-
     pub fn next(&self) -> Self {
         Self(self.0 + 1)
     }
@@ -156,6 +156,11 @@ impl PhysPage {
     为了方便管理，我们还是采用 0,1,2 的方式, 将最高层页表 index 放在 [0]
 */
 impl VirtPage {
+    pub fn pte_array(&self) -> &'static mut [PageTableEntry] {
+        let addr: VirtAddr = (*self).into();
+        unsafe {core::slice::from_raw_parts_mut(addr.0 as *mut PageTableEntry, 512)}
+    }
+
     pub fn index(&self) -> [usize; PN_LEVEL_NUM] {
         let mut vpn = self.0;
         let mut idx = [0usize; PN_LEVEL_NUM];
@@ -165,6 +170,11 @@ impl VirtPage {
             vpn >>= PN_BITSIZE;
         }
         idx
+    }
+
+    pub fn clear_page(&self) {
+        let slice = self.bytes_array();
+        slice.fill(0);
     }
 
     pub fn next(&self) -> Self {
@@ -247,4 +257,21 @@ pub fn flush_tlb(asid: usize) {
     unsafe {
         crate::arch::inner::memory::page::flush_tlb(asid);
     }
+}
+
+pub fn kernel_phys_to_virt(phys: PhysAddr) -> VirtAddr {
+    (0xFFFF_FFFF_0000_0000usize + phys.0).into()
+}
+
+pub fn kernel_virt_to_phys(virt: VirtAddr) -> PhysAddr {
+    (virt.0 - 0xFFFF_FFFF_0000_0000usize).into()
+}
+
+pub fn kernel_page_phys_to_virt(phys: PhysPage) -> VirtPage {
+    (0xFFFF_FFFF_0000_0usize + phys.0).into()
+}
+
+#[allow(unused)]
+pub fn kernel_page_virt_to_phys(virt: VirtPage) -> PhysPage {
+    (virt.0 - 0xFFFF_FFFF_0000_0usize).into()
 }

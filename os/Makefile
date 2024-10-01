@@ -37,7 +37,7 @@ ifeq ($(ARCH), riscv64)
 	QEMU_ARGS = -machine virt \
 			 -nographic \
 			 -bios ../bootloader/rustsbi-qemu.bin \
-			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY) \
+			 -kernel $(KERNEL_ELF) \
 			 -drive file=../${IMG},if=none,format=raw,id=x0 \
 			 -device virtio-blk-device,drive=x0
 else ifeq ($(ARCH), aarch64)
@@ -53,6 +53,7 @@ endif
 
 build:
 	@echo Platform: $(BOARD)
+	@cp src/board/${BOARD}/linker.ld src/arch/${ARCH}
 	@cargo build --target ${TARGET} $(MODE_ARG) --no-default-features --features ${BOARD}
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary ${KERNEL_BIN}
 

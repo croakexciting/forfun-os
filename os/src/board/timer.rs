@@ -1,7 +1,7 @@
 pub fn nanoseconds() -> usize {
-    super::peri::timer::nanoseconds()
+    super::inner::timer::nanoseconds()
 }
 
 pub fn set_trigger() {
-    super::peri::timer::set_trigger(100)
+    super::inner::timer::set_trigger(100)
 }

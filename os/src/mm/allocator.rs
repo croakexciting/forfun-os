@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 use lazy_static::*;
 use crate::utils::type_extern::RefCellWrap;
 use crate::arch::memory::page::*;
-use crate::board::peri::memory::{
+use crate::board::inner::memory::{
     KERNEL_ALLOCATOR_START,
     ALLOCATOR_START,
     ALLOCATOR_END,
@@ -95,7 +95,7 @@ pub fn frame_alloc() -> Option<PhysFrame> {
 
 pub fn kernel_frame_alloc() -> Option<PhysFrame> {
     let frame = KERNEL_FRAME_ALLOCATOR.exclusive_access().alloc()?;
-    frame.ppn.clear_page();
+    kernel_page_phys_to_virt(frame.ppn).clear_page();
     Some(frame)
 }
 

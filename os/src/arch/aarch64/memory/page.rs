@@ -1,7 +1,6 @@
 use core::arch::asm;
 
-use aarch64_cpu::{asm::barrier, registers::*};
-use tock_registers::interfaces::ReadWriteable;
+use aarch64_cpu::registers::*;
 
 use crate::arch::memory::page::PTEFlags;
 
@@ -9,13 +8,7 @@ pub const PAGE_SIZE: usize = 0x1000;
 pub const PN_BITSIZE: usize = 9;
 pub const PN_LEVEL_NUM: usize = 3;
 pub const INPAGE_OFFSET_WIDTH: usize = 12;
-pub const PA_VALID_WIDTH: usize = 44;
 pub const VA_VALID_WIDTH: usize = 39;
-
-// arm64 physical page width set to 36
-pub const PPN_VALID_WIDTH: usize = 32;
-// use three level pte
-pub const VPN_VALID_WIDTH: usize = 27;
 
 pub fn root_ppn() -> usize {
     (aarch64_cpu::registers::TTBR0_EL1.get_baddr() as usize) >> 12
@@ -29,32 +22,8 @@ pub unsafe fn flush_tlb(asid: usize) {
 }
 
 pub fn enable_va(id: usize, ppn: usize) {
-    MAIR_EL1.write(
-        MAIR_EL1::Attr1_Normal_Outer::WriteBack_NonTransient_ReadWriteAlloc
-        + MAIR_EL1::Attr1_Normal_Inner::WriteBack_NonTransient_ReadWriteAlloc
-        + MAIR_EL1::Attr0_Device::nonGathering_nonReordering_EarlyWriteAck
-    );
-
     TTBR0_EL1.write(TTBR0_EL1::ASID.val(id as u64) + TTBR0_EL1::BADDR.val((ppn << 11) as u64));
-
-    TCR_EL1.write(
-        TCR_EL1::T0SZ.val(25)
-        + TCR_EL1::TBI0::Used
-        + TCR_EL1::IPS::Bits_44
-        + TCR_EL1::TG0::KiB_4
-        + TCR_EL1::SH0::Inner
-        + TCR_EL1::ORGN0::WriteBack_ReadAlloc_WriteAlloc_Cacheable
-        + TCR_EL1::IRGN0::WriteBack_ReadAlloc_WriteAlloc_Cacheable
-        + TCR_EL1::EPD0::EnableTTBR0Walks
-        + TCR_EL1::A1::TTBR0
-        + TCR_EL1::EPD1::DisableTTBR1Walks
-    );
-
     unsafe {flush_tlb(id);}
-    
-    barrier::isb(barrier::SY);
-    SCTLR_EL1.modify(SCTLR_EL1::M::Enable + SCTLR_EL1::C::Cacheable + SCTLR_EL1::I::Cacheable);
-    barrier::isb(barrier::SY);
 }
 
 pub fn pte(ppn: usize, flags: PTEFlags) -> usize {

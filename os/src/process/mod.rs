@@ -11,7 +11,6 @@ use spin::mutex::Mutex;
 
 use crate::{
     arch::memory::page::{VirtAddr, VirtPage}, 
-    board::peri::memory::INITPROC_LOAD_ADDR, 
     mm::area::UserBuffer, 
     utils::type_extern::RefCellWrap
 };
@@ -26,10 +25,6 @@ lazy_static! {
 pub fn create_proc() -> isize {
     // let elf = unsafe { core::slice::from_raw_parts(INITPROC_LOAD_ADDR as *mut u8, 4096 * 100) };
     TASK_MANAGER.create_initproc(5)
-}
-
-pub fn kernel_init() -> isize {
-    TASK_MANAGER.kernel_init()
 }
 
 pub fn run_tasks() -> ! {
@@ -128,10 +123,6 @@ pub fn ummap(addr: usize) -> isize {
 
 pub fn mmap_with_addr(pa: usize, size: usize, permission: usize, user: bool) -> isize {
     TASK_MANAGER.mmap_with_addr(pa, size, permission, user)
-}
-
-pub fn map_peripheral(pa: usize, size: usize) -> isize {
-    TASK_MANAGER.map_peripheral(pa, size)
 }
 
 pub fn shm_open(name: String, size: usize, permission: usize) -> isize {

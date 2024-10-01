@@ -149,11 +149,6 @@ impl TaskManager {
         inner.exec(elf)
     }
 
-    pub fn kernel_init(&self) -> isize {
-        let mut inner = self.inner_access();
-        inner.kernel_init()
-    }
-
     pub fn create_initproc(&self, tick: usize) -> isize {
         let mut inner = self.inner_access();
         inner.create_initproc(tick)
@@ -249,11 +244,6 @@ impl TaskManager {
     pub fn mmap_with_addr(&self, pa: usize, size: usize, permission: usize, user: bool) -> isize {
         let mut inner = self.inner.exclusive_access();
         inner.mmap_with_addr(pa, size, permission, user)
-    }
-
-    pub fn map_peripheral(&self, pa: usize, size: usize) -> isize {
-        let mut inner = self.inner.exclusive_access();
-        inner.map_peripheral(pa, size)
     }
 
     pub fn create_or_open_shm(&self, name: String, size: usize, permission: usize) -> isize {
@@ -400,26 +390,16 @@ impl AppManagerInner {
         &mut self.idle_ctx as *mut _
     }
 
-    pub fn kernel_init(&mut self) -> isize {
-        if let None = self.kernel_mm.init_kernel_area() {
-            println!("[kernel] initproc create kernel pagetable failed");
-            return -1;
-        }
-
-        enable_va(0, self.kernel_mm.root_ppn().0);
-        0
-    }
-
     // return app id, if create failed, return -1
     // only initproc is created, other's created by fork
     pub fn create_initproc(&mut self, tick: usize) -> isize {
         // just add a process at the tail
         let mut initproc = Process::new(tick);
+
         // initialize kernel pt
-        if let None = initproc.mm.add_kernel_pt(&mut self.kernel_mm) {
-            println!("[kernel] initproc add kernel pagetable failed");
-            return -1;
-        }
+        #[cfg(feature = "riscv64_qemu")]
+        initproc.mm.add_kernel_pt();
+
         // read elf from fs
         let fd = initproc.open("shell");
         if fd < 0 {
@@ -583,10 +563,6 @@ impl AppManagerInner {
         self.current_task(true).unwrap().lock().mmap_with_addr(pa.into(), size, permission, user)
     }
     
-    pub fn map_peripheral(&mut self, pa: usize, size: usize) -> isize {
-        self.kernel_mm.map_peripheral(pa.into(), size)
-    }
-
     pub fn create_or_open_shm(&mut self, name: String, pn: usize, permission: usize) -> isize {
         let current_task = self.current_task(true).unwrap();
         let pid = current_task.lock().pid.0;
@@ -801,7 +777,7 @@ impl Process {
         let mut mm = MemoryManager::new(false);
         mm.fork(&mut self.mm);
         let switch_ctx = SwitchContext::new_with_restore_addr_and_kernel_stack_sp(
-            crate::board::peri::memory::KERNEL_STACK_START
+            crate::board::inner::memory::KERNEL_STACK_START
         );
         let pid = pid::alloc().unwrap();
         let key = pid.0;

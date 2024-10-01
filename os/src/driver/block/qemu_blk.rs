@@ -10,7 +10,10 @@ use virtio_drivers::{
     BufferDirection, Hal, PhysAddr
 };
 
-use crate::mm::{dma::{dma_alloc, dma_dealloc}, pt::translate};
+use crate::{
+    arch::memory::page::kernel_phys_to_virt, 
+    mm::{dma::{dma_alloc, dma_dealloc}, pt::translate}
+};
 
 use super::BlockDevice;
 
@@ -76,13 +79,14 @@ pub struct HalImpl;
 
 unsafe impl Hal for HalImpl {
     fn dma_alloc(pages: usize, _direction: BufferDirection) -> (PhysAddr, NonNull<u8>) {
-        let addr: usize = dma_alloc(pages).unwrap();
-        let ptr = if let Some(a) = NonNull::new(addr as *mut u8) {
+        let paddr: usize = dma_alloc(pages).unwrap();
+        let vaddr: usize = kernel_phys_to_virt(paddr.into()).0;
+        let ptr = if let Some(a) = NonNull::new(vaddr as *mut u8) {
             a
         } else {
             panic!("ptr allocator failed")
         };
-        (addr, ptr)
+        (paddr, ptr)
     }
 
     unsafe fn dma_dealloc(paddr: PhysAddr, _vaddr: NonNull<u8>, pages: usize) -> 
@@ -92,16 +96,16 @@ unsafe impl Hal for HalImpl {
     }
 
     unsafe fn mmio_phys_to_virt(paddr: PhysAddr, _size: usize) -> NonNull<u8> {
-        NonNull::new(paddr as _).unwrap()
+        let vaddr = kernel_phys_to_virt(paddr.into());
+        NonNull::new(vaddr.0 as _).unwrap()
     }
 
     unsafe fn share(buffer: NonNull<[u8]>, _direction: BufferDirection) -> PhysAddr {
-        let ppn = crate::arch::memory::page::root_ppn();
-        if ppn == 0 {
-            buffer.as_ptr() as *mut u8 as PhysAddr
+        let va = buffer.as_ptr() as *mut u8 as usize;
+        if let Some(pa) = translate(va.into()) {
+            return pa.0;
         } else {
-            let va = buffer.as_ptr() as *mut u8 as usize;
-            translate(va.into()).unwrap().0 as PhysAddr
+            return 0;
         }
     }
 

@@ -2,30 +2,29 @@ pub mod timer;
 
 #[cfg(feature = "riscv64_qemu")]
 #[path = "riscv64_qemu/mod.rs"]
-pub mod peri;
+pub mod inner;
 
 #[cfg(feature = "aarch64_qemu")]
 #[path = "aarch64_qemu/mod.rs"]
-pub mod peri;
+pub mod inner;
 
 pub fn console_putchar(c: char) {
-    peri::console_putchar(c)
+    inner::console_putchar(c)
 }
 
 pub fn console_getchar() -> u8 {
-    peri::console_getchar()
+    inner::console_getchar()
 }
 
 #[allow(unused)]
 pub fn external_irq_handler() {
-    peri::interrupt::external_irq_handler()
+    inner::interrupt::external_irq_handler()
 }
 
 pub fn board_init() {
-    peri::enable_virtual_mode();
-    peri::board_init()
+    inner::board_init()
 }
 
 pub fn shutdown(failure: bool) -> ! {
-    peri::shutdown(failure)
+    inner::shutdown(failure)
 }

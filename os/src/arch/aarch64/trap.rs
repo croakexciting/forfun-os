@@ -2,7 +2,7 @@ use aarch64_cpu::{asm::barrier, registers::*};
 use tock_registers::interfaces::ReadWriteable;
 use crate::{
     arch::context::TrapContext, 
-    board::{peri::GIC, timer::set_trigger}, 
+    board::{inner::GIC, timer::set_trigger}, 
     process::{app::SignalCode, back_to_idle, cow, exit, save_trap_ctx, signal_handler}, 
     syscall::syscall
 };

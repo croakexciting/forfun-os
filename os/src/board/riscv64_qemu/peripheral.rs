@@ -15,3 +15,5 @@ pub fn uart_init(baseaddr: usize) -> ns16550a::Uart {
     );
     uart
 }
+
+pub const BLK_HEADER_ADDR: usize = 0x1000_8000;

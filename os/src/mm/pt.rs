@@ -4,7 +4,7 @@ use core::borrow::BorrowMut;
 use alloc::vec::Vec;
 use super::allocator::{kernel_frame_alloc, PhysFrame};
 use crate::arch::memory::page::{
-    root_ppn, PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage
+    kernel_phys_to_virt, kernel_virt_to_phys, root_ppn, PTEFlags, PageTableEntry, PhysAddr, PhysPage, VirtAddr, VirtPage
 };
 
 // Every app has it's own page table
@@ -41,10 +41,10 @@ impl PageTable {
     // 不想关心你的页表是如何管理的，只需要给他们对应的物理页帧就可以了
     pub fn find_pte(&mut self, vpn: VirtPage) -> Option<&mut PageTableEntry> {
         let idx = vpn.index();
-        let mut ppn = self.root;
+        let mut vpn: VirtPage = kernel_phys_to_virt(self.root.into()).into();
         for (k, v) in idx.iter().enumerate() {
             // TODO: 需要考虑下如何在虚地址模式下访问页表
-            let pte = ppn.pte_array()[*v].borrow_mut();
+            let pte = vpn.pte_array()[*v].borrow_mut();
             if k == (idx.len() - 1) {
                 // 从叶子页表中获得了 PTE，直接返回
                 return Some(pte)
@@ -56,17 +56,17 @@ impl PageTable {
                     self.frames.push(frame);
                 }
             }
-            ppn = pte.ppn();
+            vpn = kernel_phys_to_virt(pte.ppn().into()).into();
         }
         None
     }
 
     pub fn find_pte_only(&self, vpn: VirtPage) -> Option<&mut PageTableEntry> {
         let idx = vpn.index();
-        let mut ppn = self.root;
+        let mut vpn: VirtPage = kernel_phys_to_virt(self.root.into()).into();
         for (k, v) in idx.iter().enumerate() {
             // TODO: 需要考虑下如何在虚地址模式下访问页表
-            let pte = ppn.pte_array()[*v].borrow_mut();
+            let pte = vpn.pte_array()[*v].borrow_mut();
             if k == (idx.len() - 1) {
                 // 从叶子页表中获得了 PTE，直接返回
                 return Some(pte)
@@ -75,16 +75,17 @@ impl PageTable {
                     return None;
                 }
             }
-            ppn = pte.ppn();
+            vpn = kernel_phys_to_virt(pte.ppn().into()).into();
         }
         None
     }
 
+    #[allow(unused)]
     pub fn find_pte_with_level(&mut self, vpn: VirtPage, level: usize, readonly: bool) -> Option<&mut PageTableEntry> {
         let idx = vpn.index();
-        let mut ppn = self.root;
+        let mut vpn: VirtPage = kernel_phys_to_virt(self.root.into()).into();
         for (k, v) in idx.iter().enumerate() {
-            let pte = ppn.pte_array()[*v].borrow_mut();
+            let pte = vpn.pte_array()[*v].borrow_mut();
             if k == level {
                 return Some(pte);
             } else {
@@ -98,7 +99,7 @@ impl PageTable {
                 }                
             }
 
-            ppn = pte.ppn();
+            vpn = kernel_phys_to_virt(pte.ppn().into()).into();
         }
 
         None
@@ -153,6 +154,7 @@ impl PageTable {
         Some(old_pte)
     }
 
+    #[allow(unused)]
     pub fn set_pte_with_level(&mut self, new_pte: PageTableEntry, vpn: VirtPage, level: usize) -> Option<PageTableEntry> {
         let pte = self.find_pte_with_level(vpn, level, false)?;
         let old_pte = pte.clone();
@@ -197,14 +199,14 @@ impl Iterator for PageTable {
     fn next(&mut self) -> Option<Self::Item> {
         while self.index < (1 << 27) {
             let idx = VirtPage::from(self.index).index();
-            let mut ppn = self.root;
+            let mut vpn: VirtPage = kernel_phys_to_virt(self.root.into()).into();
             for (k, v) in idx.iter().enumerate() {
-                let pte = ppn.pte_array()[*v].borrow_mut();
+                let pte = vpn.pte_array()[*v].borrow_mut();
                 if pte.is_valid() {
                     if k == 2 {
                         return Some((self.index, pte));
                     } else {
-                        ppn = pte.ppn();
+                        vpn = kernel_phys_to_virt(pte.ppn().into()).into();
                         continue;
                     }
                 } else {
@@ -219,7 +221,11 @@ impl Iterator for PageTable {
 }
 
 pub fn translate(va: VirtAddr) -> Option<PhysAddr> {
-    let ppn = root_ppn();
-    let pt = PageTable::new_with_ppn(ppn);
-    pt.translate(va)
+    if va.is_kernel() {
+        Some(kernel_virt_to_phys(va))
+    } else {        
+        let ppn = root_ppn();
+        let pt = PageTable::new_with_ppn(ppn);
+        pt.translate(va)
+    }
 }
