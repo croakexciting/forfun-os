@@ -197,7 +197,7 @@ match signal_code {
 
 该 IPC 类似于 QNX channel 机制，由客户端发送请求，服务端处理请求并回复客户端。客户端通过命名找到服务端。通信流程如下。
 
-{{< svg src="images/server.svg" name="Client - Server" >}}
+<img src="../drawio/server.svg" name="Client - Server" >
 
 客户端请求是阻塞的，一定要等到 server 端的回复，而服务端 wait_request 可以设置超时时间，方便监听多个 request
 
