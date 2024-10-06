@@ -9,9 +9,9 @@
 ## 1.1 详细设计文档
 
 - [系统调用及任务调度](./doc/syscall.md)
-- [内存管理](../ffos3)
-- [进程管理和 IPC](../ffos4)
-- [用户程序开发](../ffos5)
+- [内存管理](./doc/memory.md)
+- [进程管理和 IPC](./doc/process.md)
+- [用户程序开发](./doc/user.md)
 - [CPU 架构适配](TBD)
 - [BOARD 适配](TBD)
 
@@ -49,8 +49,7 @@
 
 为了方便体验，可以使用 docker 进行运行开发，请预先安装 docker 
 
-如果不想在 docker 中进行开发，环境安装请参考
-https://rcore-os.cn/rCore-Tutorial-Book-v3/chapter0/5setup-devel-env.html
+另外可以本地安装，安装文档 [本地环境安装](./doc/install.md)
 
 ### 3.2 运行 Forfun OS
 
@@ -72,6 +71,8 @@ hello world!
 # 停止内核，目前必须用 kill 才可以停止
 make kill
 ```
+
+[编译和运行文档](./doc/startup.md)
 
 ### 3.3 可以运行的用户程序
 
