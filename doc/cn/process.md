@@ -152,7 +152,7 @@ Forfun OS 支持的 IPC 如下
 
 信号处理流程如下
 
-<img src="../drawio/signal.svg" name="Signal" >
+<img src="../../drawio/signal.svg" name="Signal" >
 
 检查信号的工作是在 trap_handler 里执行，这样用户进程每次进入内核空间时，就会自动执行检查
 
@@ -197,7 +197,7 @@ match signal_code {
 
 该 IPC 类似于 QNX channel 机制，由客户端发送请求，服务端处理请求并回复客户端。客户端通过命名找到服务端。通信流程如下。
 
-<img src="../drawio/server.svg" name="Client - Server" >
+<img src="../../drawio/server.svg" name="Client - Server" >
 
 客户端请求是阻塞的，一定要等到 server 端的回复，而服务端 wait_request 可以设置超时时间，方便监听多个 request
 
