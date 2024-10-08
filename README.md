@@ -52,11 +52,7 @@ make docker_into
 
 ```
 
-<<<<<<< HEAD
 Build and run forfun os ref to [Build and run](./doc/en/startup.md)
-=======
-Build and run forfun os ref to [Build and run](./doc/startup.md)
->>>>>>> a3d9847 (add some en doc)
 
 ```
 # default run on riscv64 qemu virt
@@ -91,8 +87,4 @@ hello world!
 
 ## Contact me
 
-<<<<<<< HEAD
 Forfun os is just a toy project and not tested, if you find any bug or have any idea and comment, please create a issue or pull request.
-=======
-Forfun os is just a toy project, if you have any idea or comment, please create a issue or pull request.
->>>>>>> a3d9847 (add some en doc)
