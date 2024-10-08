@@ -76,7 +76,7 @@ Forfun OS 的进程地址空间设计如下图，这几乎是最简单的设计�
 - 应用程序中所有段和 kernel stack 则是采用 Framed 的方式映射，该方式会为每个物理页面申请一个物理页帧，并将二者地址映射关系写入页表。
 - 一个进程的地址空间中，内核空间和用户空间共享一个页表，这样从用户空间 trap 进入内核空间时，无需进行页表的转换，简化了操作。
 
-<img src="../drawio//mm.svg" name="riscv64 qemu virt 地址空间" >
+<img src="../../drawio//mm.svg" name="riscv64 qemu virt 地址空间" >
 
 ## 4 页表功能的实现
 

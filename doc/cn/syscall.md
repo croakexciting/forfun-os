@@ -16,7 +16,7 @@
 
 系统调用流程如下图
 
-<img src="../drawio//trap.svg" name="syscall 流程" >
+<img src="../../drawio//trap.svg" name="syscall 流程" >
 
 用户空间执行系统调用后，触发软件中断，进入 trap_handler
 
@@ -170,7 +170,7 @@ __restore:
 
 任务切换流程如下
 
-<img src="../drawio/switch.svg" name="任务切换流程" >
+<img src="../../drawio/switch.svg" name="任务切换流程" >
 
 任务切换过程中主要涉及**任务上下文**的切换，它和 Trap 上下文是不同的，结构体如下，请仔细看代码中的注释内容，是任务切换的关键。
 
@@ -211,7 +211,7 @@ kernel stack，顾名思义就是 **内核栈** ，这是其最基础的理解�
 
 下图结合代码说明了是如何实现控制流切换，提供了一个切换的例子
 
-<img src="../drawio/switch_detail.svg" name="切换细节" >
+<img src="../../drawio/switch_detail.svg" name="切换细节" >
 
 如上图所示，定时器中断触发时，任务被打断，进入 kernel，执行 back_to_idle ，将控制权交还，idle 控制流实际运行在 run_task 函数的 loop (while) 循环中。当 idle 得到控制权后，会从上次被打断的地方继续执行，被打断的地方也就是运行 __switch 的地方，继续执行相当于从 loop 循环开始的地方。继续执行后，会由调度器选择下一个运行的任务，随后会从 idle 流切换到被选中的任务流。由于任务流被打断的地方一定在 back_to_idle 函数中 __switch ，因此交还后，会接着执行，也就是完成 back_to_idle，返回 trap_handler，直到 restore 回去。
 
