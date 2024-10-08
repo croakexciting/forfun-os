@@ -10,7 +10,7 @@ Forfun OS is a unix-like kernel, written by rust. Now support riscv64 and aarch6
 
 <img src="./drawio/architecture.svg" alt="kernel architecture"/>
 
-### 1.1 Design Docs
+### 1.1 Design Docs (ongoing)
 
 - [Syscall and task schedule]()
 - [Memory manager]()
@@ -52,7 +52,7 @@ make docker_into
 
 ```
 
-Build and run forfun os ref to [Build and run](./doc/startup.md)
+Build and run forfun os ref to [Build and run](./doc/en/startup.md)
 
 ```
 # default run on riscv64 qemu virt
@@ -87,4 +87,4 @@ hello world!
 
 ## Contact me
 
-Forfun os is just a toy project, if you have any idea or comment, please create a issue or pull request.
+Forfun os is just a toy project and not tested, if you find any bug or have any idea and comment, please create a issue or pull request.
