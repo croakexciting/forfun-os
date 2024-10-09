@@ -41,7 +41,7 @@ fn syscall(id: usize, args: [usize; 4]) -> isize {
 
 ### 2.2 Store User space context
 
-The first thing to do in trap handler is save the user space context, the context is a set of registers, include all general registers, trap cause register, user space process pc and stack pointer.
+After trap into kernel, The first thing to do is saving the user space context, the context is a set of registers, include all general registers, trap cause register, user space process pc and stack pointer.
 
 > The user space pc and stack pointer points to the location where the user process should be executed after recovering from trap.
 
