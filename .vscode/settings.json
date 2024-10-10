@@ -10,4 +10,12 @@
     // "rust-analyzer.cargo.features": [
     //     "board_qemu"
     // ]
+
+    "[markdown]": {
+        "editor.quickSuggestions": {
+          "other": "on",
+          "comments": "on",
+          "strings": "on"
+        }
+    },
 }

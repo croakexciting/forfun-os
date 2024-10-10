@@ -458,7 +458,6 @@ impl AppManagerInner {
             }
         } else {
             self.started = true;
-            // 无论如何，至少有一个初始进程，pid 为 0 的进程必须存在
             Some(self.task(0).unwrap())
         }
     }

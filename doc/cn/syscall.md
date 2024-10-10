@@ -22,6 +22,8 @@
 
 ### 2.1 用户空间 syscall 
 
+下面以 riscv64 架构为例
+
 ```
 # user/src/syscall.rs
 
@@ -58,6 +60,8 @@ pub struct TrapContext {
 
 上下文保存过程，将上下文保存在 kernel stack 的最顶端
 > 每次从用户空间进入内核时，kernel stack sp 都会始于预设的栈顶端，这是因为在恢复到用户空间时，kernel stack sp 会回到预设的栈顶端。比如 forfun-os 中，我们将 kernel stack sp 初始值设为 0x9000_0000, 那么每次 trap 进入内核时，kernel_stack sp 都是这个值，这是一个非常自然的过程。
+
+<img src="../../drawio/syscall_kernel_stack.svg" name="kernel stack 在 trap 中的变化" >
 
 ```
 # os/src/trap/trap.S

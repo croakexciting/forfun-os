@@ -12,7 +12,8 @@ Forfun OS is a unix-like kernel, written by rust. Now support riscv64 and aarch6
 
 ### 1.1 Design Docs (ongoing)
 
-- [Syscall and task schedule]()
+- [Syscall](./doc/en/syscall.md)
+- [Task schedule](./doc/en/schedule.md)
 - [Memory manager]()
 - [Process manager and IPC]()
 - [User process development]()
@@ -39,7 +40,7 @@ Forfun OS is a unix-like kernel, written by rust. Now support riscv64 and aarch6
 * [ ] Driver Interrupt
 * [ ] Linux app adaptation
 
-## Quick Start
+## 3 Quick Start
 
 Install the dev environment ref to [installation guide](./doc/en/install.md)
 
