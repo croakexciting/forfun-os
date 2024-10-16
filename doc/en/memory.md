@@ -10,7 +10,6 @@ The memory manage function basic includes follow parts:
 - memory area manager
 - physcal frame allocator
 - memory allocator
-- elf loader
 
 ## 2 Concepts 
 
@@ -116,6 +115,11 @@ The memory manager consists of multi MapArea instance, MapArea is a continuous v
 
 Also, it contains a pagetable instance, which manage this memory manager. The buddy allocator dynamic allocate memory area (MapArea).
 
+Its important member function is:
+
+- fork: Initialize the children process memory manager and fork father process user space memory area.
+- load_elf: Load a elf file and initialize the process context. Ensure the process ready to run.
+
 ### 3.3 Memory area
 
 The MapArea is a continuous virtual address space. The structure shows as below
@@ -139,7 +143,65 @@ Because it's a continuous memory area, we define start and end virtual page. The
 
 The permission define this area's permission, R/W/X/U. 
 
-Frames store the physical frames used in this area. And this frames will deallocate automatically when drop the MapArea instance.
+Frames store the physical frames used in this area. And this frames will deallocate and free automatically when drop the MapArea instance because we implement the drop Traits for PhysFrame struct.
+
+Shared store the virtual page which belongs to several process. When fork a process, the father process will share its user memory space with children, these pages will be marked as **shared**, also, the permission will set to can't write. If process want to write data into these pages, will trigger **copy-on-write** mechanism. Kernel will allocate a brand new page and recycle the old page. The copy-on-write mechanism can save the memory usage.
+
+Its key member function is:
+
+- fork: Duplicate itself, create a same MapArea instance, and add the duplication into the new process memory manager. For saving memory usage, we won't create new pages in fork. We share pages with children process.
+- map: Allocate physical frame and create pte (page table entry) for every single virtual pages.
+- cow: copy-on-write, map a brand new page if process want to write data into shared pages.
 
 ### 3.4 Page table
 
+Each memory manager contains a page table manager, which responsible for add and delete pte (page table entry).
+
+The page table manager's struct show as below
+
+```
+pub struct PageTable {
+    // level-1 page table memory address
+    root: PhysPage,
+    
+    // Physical frame which store the page tables
+    frames: Vec<PhysFrame>,
+
+    index: usize,
+}
+
+```
+The frames are stored in here, and will be deallocated and free automatically when drop the page table instance, always occur when kernel recycle a process resources.
+
+The key member function of page table is:
+
+- find_pte: Use to find the pte pointer by virtual memory (actually, virtual memory is a index)
+- map: Generate a pte and set it in page table
+- unmap: Delete a virtual page's pte in page table
+
+We can conveniently add and delete pte in page tables by page table manager.
+
+### 3.5 Allocators
+
+The memory manager modules contains two types of allocator.
+
+- Physical frame allocator: This is a global physical memory frame allocator.
+- Buddy Allocator: Each memory manager contains a buddy allocator for dynamic memory allocation
+
+#### 3.5.1 Physical frame allocator
+
+Use a very simple allocate strategy. First, we define a continuous physical memory area, and allocate frame one by one in order. If the area start address equals to end address, we will find if there are recycled frame.
+
+When the physframe dropped,  the dealloc function will be triggered and add the frame into recycled vector.
+
+#### 3.5.2 Buddy allocator
+
+The buddy allocator is used for dynamic memory allocation, use [buddy allocation strategy](https://en.wikipedia.org/wiki/Buddy_memory_allocation).
+
+## 4 Conclusion
+
+I think the kernel memory manager function is the most complex and difficult module in Forfun OS, I have spent the most time on it.
+
+But Forfun OS seems like a real kernel after completing these functions, so the effort is worth it.
+
+This page just introduce the implementation of memory manage function in Forfun OS, you can take it as a example, but you still need to learn the basic knowledge about memory and page table.
