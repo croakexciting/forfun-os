@@ -23,9 +23,10 @@ pub struct MemoryManager {
     pub pt: PageTable,
     kernel_stack_area: MapArea,
     app_areas: Vec<Arc<RwLock<MapArea>>>,
-    // 堆可用区域，左闭右开的集合
+    // buddy allocator for the dynamic mmap
     buddy_alloctor: Option<BuddyAllocator>,
 
+    // legacy member, not used now
     _kernel_area: Vec<MapArea>,
 }
 

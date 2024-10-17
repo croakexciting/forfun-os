@@ -9,9 +9,9 @@ use crate::arch::memory::page::{
 
 // Every app has it's own page table
 pub struct PageTable {
-    // 第一级页表的页号，其实就是地址
+    // level-1 page table memory address
     root: PhysPage,
-    // 存储页表的物理页帧，放在这里只是为了页表实例回收的时候自动将 Frame dealloc
+    // Physical frame which store the page tables
     frames: Vec<PhysFrame>,
 
     index: usize,

@@ -18,12 +18,11 @@ use super::{
 #[derive(Clone)]
 pub struct MapArea {
     pub start_vpn: VirtPage,
-    // end_vpn 是不包含在内的，也就是一个左闭右开的范围
+    // end_vpn it self not included in the area
     pub end_vpn: VirtPage,
     
     map_type: MapType,
     permission: Permission,
-    // 放在这里只是为了在 drop 的时候自动执行 dealloc 回收这些物理页帧到 alloctor
     // virtual page => physframe
     frames: BTreeMap<usize, Arc<PhysFrame>>,
     shared: Vec<VirtPage>,
