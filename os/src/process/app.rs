@@ -740,7 +740,6 @@ pub struct Process {
     fds: Vec<Option<Arc<dyn File>>>,
     signals: SignalFlags,
     signals_mask: SignalFlags,
-    // 没有 handler，默认啥也不做，忽略
     signal_actions: Vec<Option<SignalAction>>,
     trap_ctx_backup: Option<TrapContext>,
 }
@@ -834,11 +833,12 @@ impl Process {
             if pid == -1 || (pid as usize) == v.lock().pid.0 {
                 match v.lock().status {
                     ProcessStatus::EXITED(_) => {
+                        // drop the child process instance, recycle its resources
                         self.children.remove(k);
                         result = 0;
                     }
                     _ => {
-                        // 还没结束
+                        // not finished
                         result = -2;
                         break;
                     }
